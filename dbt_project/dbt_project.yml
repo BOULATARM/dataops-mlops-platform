@@ -1,0 +1,30 @@
+name: olist_medallion
+version: '1.0.0'
+config-version: 2
+
+profile: olist_medallion
+
+model-paths: ["models"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+docs-paths: ["docs"]
+target-path: "target"
+clean-targets: ["target", "dbt_packages"]
+
+models:
+  olist_medallion:
+    bronze:
+      +schema: bronze
+      +materialized: table
+      +tags: ["bronze"]
+    silver:
+      +schema: silver
+      +materialized: table
+      +tags: ["silver"]
+    gold:
+      +schema: gold
+      +materialized: table
+      +tags: ["gold"]
+
+vars:
+  duckdb_path: "{{ env_var('DUCKDB_PATH', '../warehouse/duckdb/olist.duckdb') }}"

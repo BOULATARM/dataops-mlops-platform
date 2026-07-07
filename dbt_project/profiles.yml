@@ -1,0 +1,15 @@
+olist_medallion:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: "{{ env_var('DUCKDB_PATH', '../warehouse/duckdb/olist.duckdb') }}"
+      threads: 4
+    ci:
+      type: duckdb
+      path: ":memory:"
+      threads: 2
+    prod:
+      type: duckdb
+      path: "{{ env_var('DUCKDB_PATH') }}"
+      threads: 4

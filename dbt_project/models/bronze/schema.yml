@@ -1,0 +1,173 @@
+version: 2
+
+sources:
+  - name: bronze
+    schema: bronze
+    description: "Données brutes ingérées par dlt — append-only, aucune transformation"
+    tables:
+      - name: raw_orders
+        description: "Commandes Olist brutes (olist_orders_dataset.csv)"
+        columns:
+          - name: order_id
+            description: "Identifiant unique de la commande"
+          - name: _loaded_at
+            description: "Timestamp d'ingestion dlt (UTC ISO 8601)"
+          - name: _source_file
+            description: "Nom du fichier CSV source"
+          - name: _batch_id
+            description: "UUID unique par exécution du pipeline"
+
+      - name: raw_customers
+        description: "Clients Olist bruts (olist_customers_dataset.csv)"
+        columns:
+          - name: customer_id
+          - name: customer_unique_id
+          - name: _loaded_at
+          - name: _source_file
+          - name: _batch_id
+
+      - name: raw_order_items
+        description: "Lignes de commande brutes (olist_order_items_dataset.csv)"
+        columns:
+          - name: order_id
+          - name: order_item_id
+          - name: product_id
+          - name: seller_id
+          - name: price
+          - name: freight_value
+          - name: _loaded_at
+          - name: _source_file
+          - name: _batch_id
+
+      - name: raw_products
+        description: "Produits Olist bruts CSV (olist_products_dataset.csv)"
+        columns:
+          - name: product_id
+          - name: _loaded_at
+          - name: _source_file
+          - name: _batch_id
+
+      - name: raw_reviews
+        description: "Avis clients Olist bruts (olist_order_reviews_dataset.csv)"
+        columns:
+          - name: review_id
+          - name: order_id
+          - name: review_score
+          - name: review_comment_title
+          - name: review_comment_message
+          - name: _loaded_at
+          - name: _source_file
+          - name: _batch_id
+
+      - name: raw_payments
+        description: "Paiements Olist bruts (olist_order_payments_dataset.csv)"
+        columns:
+          - name: order_id
+          - name: payment_type
+          - name: payment_value
+          - name: _loaded_at
+          - name: _source_file
+          - name: _batch_id
+
+      - name: raw_sellers
+        description: "Vendeurs Olist bruts (olist_sellers_dataset.csv)"
+        columns:
+          - name: seller_id
+          - name: _loaded_at
+          - name: _source_file
+          - name: _batch_id
+
+      - name: raw_geolocation
+        description: "Géolocalisation codes postaux (olist_geolocation_dataset.csv)"
+        columns:
+          - name: geolocation_zip_code_prefix
+          - name: geolocation_lat
+          - name: geolocation_lng
+          - name: geolocation_city
+          - name: geolocation_state
+          - name: _loaded_at
+          - name: _source_file
+          - name: _batch_id
+
+      - name: raw_category_translation
+        description: "Traduction catégories produits PT→EN (product_category_name_translation.csv)"
+        columns:
+          - name: product_category_name
+          - name: product_category_name_english
+          - name: _loaded_at
+          - name: _source_file
+          - name: _batch_id
+
+      - name: raw_exchange_rates
+        description: "Taux de change API (exchange_rates*.json) — une ligne par paire devise/taux"
+        columns:
+          - name: currency_code
+          - name: rate
+          - name: base_currency
+          - name: fetched_at
+          - name: _loaded_at
+          - name: _source_file
+          - name: _batch_id
+
+      - name: raw_products_json
+        description: "Catalogue produits interne JSON (products_sample.json)"
+        columns:
+          - name: product_id
+          - name: product_name
+          - name: category
+          - name: brand
+          - name: unit_price
+          - name: unit_cost
+          - name: _loaded_at
+          - name: _source_file
+          - name: _batch_id
+
+models:
+  - name: bronze_orders
+    description: "Vue Bronze sur raw_orders"
+    columns:
+      - name: order_id
+        tests:
+          - not_null
+
+  - name: bronze_customers
+    description: "Vue Bronze sur raw_customers"
+    columns:
+      - name: customer_id
+        tests: [not_null]
+
+  - name: bronze_order_items
+    description: "Vue Bronze sur raw_order_items"
+    columns:
+      - name: order_id
+        tests: [not_null]
+
+  - name: bronze_products
+    description: "Vue Bronze sur raw_products (CSV)"
+    columns:
+      - name: product_id
+        tests: [not_null]
+
+  - name: bronze_reviews
+    description: "Vue Bronze sur raw_reviews"
+    columns:
+      - name: review_id
+        tests: [not_null]
+
+  - name: bronze_payments
+    description: "Vue Bronze sur raw_payments"
+    columns:
+      - name: order_id
+        tests: [not_null]
+
+  - name: bronze_sellers
+    description: "Vue Bronze sur raw_sellers"
+    columns:
+      - name: seller_id
+        tests: [not_null]
+
+  - name: bronze_exchange_rates
+    description: "Vue Bronze sur raw_exchange_rates"
+    columns:
+      - name: currency_code
+        tests: [not_null]
