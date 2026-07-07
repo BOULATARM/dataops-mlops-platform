@@ -1,0 +1,34 @@
+version: 2
+
+# Version de base livree avec les modeles Gold (piste transformation).
+# Le data contract complet (descriptions par colonne, accepted_values,
+# relationships) est enrichi dans une PR ulterieure par la piste qualite
+# — voir docs/data_contract.md et docs/data_dictionary.md.
+
+models:
+  - name: gold_orders_summary
+    columns:
+      - name: customer_unique_id
+        tests: [not_null]
+
+  - name: gold_customer_rfm
+    columns:
+      - name: customer_unique_id
+        tests: [not_null, unique]
+
+  - name: gold_product_performance
+    columns:
+      - name: product_id
+        tests: [not_null, unique]
+
+  - name: gold_seller_ranking
+    columns:
+      - name: seller_id
+        tests: [not_null, unique]
+
+  - name: gold_reviews_features
+    columns:
+      - name: review_id
+        tests: [not_null, unique]
+      - name: satisfied
+        tests: [not_null]

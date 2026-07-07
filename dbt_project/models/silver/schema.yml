@@ -1,0 +1,48 @@
+version: 2
+
+# Version de base livree avec les modeles Silver (piste transformation).
+# Le data contract complet (descriptions par colonne, accepted_values,
+# relationships) est enrichi dans une PR ulterieure par la piste qualite
+# — voir docs/data_contract.md et docs/data_dictionary.md.
+
+models:
+  - name: silver_orders
+    columns:
+      - name: order_id
+        tests: [not_null, unique]
+      - name: customer_id
+        tests: [not_null]
+
+  - name: silver_customers
+    columns:
+      - name: customer_id
+        tests: [not_null, unique]
+
+  - name: silver_products
+    columns:
+      - name: product_id
+        tests: [not_null, unique]
+
+  - name: silver_reviews
+    columns:
+      - name: review_id
+        tests: [not_null, unique]
+      - name: order_id
+        tests: [not_null]
+
+  - name: silver_payments
+    columns:
+      - name: order_id
+        tests: [not_null]
+
+  - name: silver_sellers
+    columns:
+      - name: seller_id
+        tests: [not_null, unique]
+
+  - name: silver_order_items
+    columns:
+      - name: order_id
+        tests: [not_null]
+      - name: product_id
+        tests: [not_null]

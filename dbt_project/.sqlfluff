@@ -1,0 +1,21 @@
+[sqlfluff]
+templater = dbt
+dialect = duckdb
+sql_file_exts = .sql
+
+[sqlfluff:templater:dbt]
+project_dir = .
+profiles_dir = .
+profile = olist_medallion
+target = dev
+
+[sqlfluff:rules]
+max_line_length = 120
+indent_unit = space
+tab_space_size = 4
+
+[sqlfluff:rules:aliasing.table]
+aliasing = explicit
+
+[sqlfluff:rules:aliasing.column]
+aliasing = explicit
