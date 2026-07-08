@@ -1,34 +1,103 @@
 version: 2
 
-# Version de base livree avec les modeles Gold (piste transformation).
-# Le data contract complet (descriptions par colonne, accepted_values,
-# relationships) est enrichi dans une PR ulterieure par la piste qualite
-# — voir docs/data_contract.md et docs/data_dictionary.md.
+# Data contract ENRICHI — piste qualite (Maroua).
+# Complete la version de base livree par la piste transformation avec :
+# description exhaustive de chaque colonne, tests accepted_values/relationships
+# supplementaires et tests dbt_expectations. Voir docs/data_contract.md pour
+# la politique d'evolution de schema associee.
 
 models:
   - name: gold_orders_summary
+    description: "KPIs commandes agrégés par client et par mois (CA, nombre de commandes, panier moyen)"
     columns:
       - name: customer_unique_id
+        description: "Référence vers silver_customers.customer_unique_id"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('silver_customers')
+              field: customer_unique_id
+      - name: order_month
+        description: "Mois calendaire de la commande (format YYYY-MM), clé de regroupement"
         tests: [not_null]
 
   - name: gold_customer_rfm
+    description: "Scoring RFM (Récence/Fréquence/Montant) par client, un client = une ligne"
     columns:
       - name: customer_unique_id
-        tests: [not_null, unique]
+        description: "Référence vers silver_customers.customer_unique_id"
+        tests:
+          - not_null
+          - unique
+          - relationships:
+              to: ref('silver_customers')
+              field: customer_unique_id
 
   - name: gold_product_performance
+    description: "Revenus, volumes et notes moyennes par produit et catégorie"
     columns:
       - name: product_id
-        tests: [not_null, unique]
+        description: "Référence vers silver_products.product_id"
+        tests:
+          - not_null
+          - unique
+          - relationships:
+              to: ref('silver_products')
+              field: product_id
 
   - name: gold_seller_ranking
+    description: "Performance des vendeurs (délais, notes, CA, volume)"
     columns:
       - name: seller_id
-        tests: [not_null, unique]
+        description: "Référence vers silver_sellers.seller_id"
+        tests:
+          - not_null
+          - unique
+          - relationships:
+              to: ref('silver_sellers')
+              field: seller_id
 
   - name: gold_reviews_features
+    description: >
+      Feature set ML pour la classification satisfaction client.
+      Target : satisfied = 1 si review_score >= 4, sinon 0.
     columns:
       - name: review_id
-        tests: [not_null, unique]
+        description: "Référence vers silver_reviews.review_id — une ligne par avis"
+        tests:
+          - not_null
+          - unique
+          - relationships:
+              to: ref('silver_reviews')
+              field: review_id
       - name: satisfied
-        tests: [not_null]
+        description: "Target binaire du modèle ML : 1 si review_score >= 4, sinon 0"
+        tests:
+          - not_null
+          - accepted_values:
+              values: [0, 1]
+      - name: review_score
+        description: "Note brute laissée par le client, reprise de silver_reviews (1 à 5)"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 1
+              max_value: 5
+      - name: delivery_delay_days
+        description: "Délai livraison réelle vs estimée (négatif = en avance)"
+      - name: has_comment
+        description: "Indique si le client a laissé un commentaire textuel"
+        tests:
+          - accepted_values:
+              values: [true, false]
+      - name: review_comment_length
+        description: "Nombre de caractères du commentaire (0 si absent)"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+      - name: payment_type
+        description: "Type de paiement de la commande associée à l'avis"
+        tests:
+          - not_null
+          - accepted_values:
+              values: [credit_card, boleto, voucher, debit_card, not_defined]

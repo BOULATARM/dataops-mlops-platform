@@ -1,48 +1,116 @@
 version: 2
 
-# Version de base livree avec les modeles Silver (piste transformation).
-# Le data contract complet (descriptions par colonne, accepted_values,
-# relationships) est enrichi dans une PR ulterieure par la piste qualite
-# — voir docs/data_contract.md et docs/data_dictionary.md.
+# Data contract ENRICHI — piste qualite (Maroua).
+# Complete la version de base livree par la piste transformation avec :
+# description exhaustive de chaque colonne, tests accepted_values/relationships
+# supplementaires et tests dbt_expectations. Voir docs/data_contract.md pour
+# la politique d'evolution de schema associee.
 
 models:
   - name: silver_orders
+    description: "Commandes nettoyées, typées et dédupliquées (clé naturelle : order_id)"
     columns:
       - name: order_id
+        description: "Identifiant unique de la commande, clé primaire de la couche Silver"
         tests: [not_null, unique]
       - name: customer_id
+        description: "Référence vers silver_customers.customer_id"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('silver_customers')
+              field: customer_id
+      - name: order_status
+        description: "Statut du cycle de vie de la commande, normalisé en minuscules"
+        tests:
+          - accepted_values:
+              values: [delivered, shipped, canceled, invoiced, processing,
+                       created, approved, unavailable]
+      - name: order_purchase_timestamp
+        description: "Horodatage de passation de la commande (UTC)"
         tests: [not_null]
 
   - name: silver_customers
+    description: "Clients dédupliqués sur customer_unique_id"
     columns:
       - name: customer_id
+        description: "Identifiant technique client (1 par commande, non stable dans le temps)"
         tests: [not_null, unique]
+      - name: customer_unique_id
+        description: "Identifiant stable du client, utilisé pour le scoring RFM en Gold"
+        tests: [not_null]
 
   - name: silver_products
+    description: "Produits avec traduction catégorie en anglais"
     columns:
       - name: product_id
+        description: "Identifiant unique du produit"
         tests: [not_null, unique]
 
   - name: silver_reviews
+    description: "Avis clients avec score validé et texte nettoyé"
     columns:
       - name: review_id
+        description: "Identifiant unique de l'avis"
         tests: [not_null, unique]
       - name: order_id
-        tests: [not_null]
+        description: "Référence vers silver_orders.order_id"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('silver_orders')
+              field: order_id
+      - name: review_score
+        description: "Note laissée par le client, entière, comprise entre 1 et 5"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 1
+              max_value: 5
 
   - name: silver_payments
+    description: "Paiements avec type validé"
     columns:
       - name: order_id
-        tests: [not_null]
+        description: "Référence vers silver_orders.order_id"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('silver_orders')
+              field: order_id
+      - name: payment_type
+        description: "Moyen de paiement utilisé pour la commande"
+        tests:
+          - accepted_values:
+              values: [credit_card, boleto, voucher, debit_card, not_defined]
 
   - name: silver_sellers
+    description: "Vendeurs dédupliqués"
     columns:
       - name: seller_id
+        description: "Identifiant unique du vendeur"
         tests: [not_null, unique]
 
   - name: silver_order_items
+    description: "Lignes de commande enrichies (join orders + products)"
     columns:
       - name: order_id
-        tests: [not_null]
+        description: "Référence vers silver_orders.order_id"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('silver_orders')
+              field: order_id
       - name: product_id
-        tests: [not_null]
+        description: "Référence vers silver_products.product_id"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('silver_products')
+              field: product_id
+      - name: price
+        description: "Prix unitaire de la ligne de commande, doit être strictement positif"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              strictly: true
