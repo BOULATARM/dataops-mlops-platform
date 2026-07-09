@@ -1,0 +1,153 @@
+# ─────────────────────────────────────────────────────────────────────────────
+#  MLops & Dataops Platform — Docker Compose
+#  Services : dagster-webserver · dagster-daemon · mlflow-server · fastapi
+#
+#  Ports host :  3100 (Dagster UI)  |  5100 (MLflow UI)  |  8100 (FastAPI)
+#  Reseau      : mlops_net  172.29.0.0/16
+#  (data-engineering-platform utilise de_network 172.28.0.0/16 + ports 3000/3306/8080/27017)
+#
+#  Variables requises dans .env (a la racine du projet) :
+#    DATA_PATH   chemin HOTE vers data-engineering-platform/data/raw/
+#    DUCKDB_PATH chemin HOTE vers warehouse/duckdb/olist.duckdb
+#  Sinon les defaults du compose s'appliquent.
+# ─────────────────────────────────────────────────────────────────────────────
+
+networks:
+  mlops_net:
+    driver: bridge
+    name: mlops_net
+    ipam:
+      config:
+        - subnet: 172.29.0.0/16
+
+volumes:
+  dagster_home:      # metadonnees Dagster (runs, logs, schedules) — SQLite
+  mlflow_data:       # backend MLflow (SQLite mlruns.db + artefacts)
+
+services:
+
+  # ── Dagster Webserver (UI + GraphQL) ────────────────────────────────────────
+  dagster-webserver:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.dagster
+    image: mlops/dagster:latest
+    container_name: mlops_dagster_webserver
+    command: ["dagster-webserver", "-h", "0.0.0.0", "-p", "3100"]
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+    environment:
+      DAGSTER_HOME:          /dagster_home
+      DUCKDB_PATH:           /data/duckdb/olist.duckdb
+      DATA_PATH:             /data/raw
+      MLFLOW_TRACKING_URI:   http://mlflow-server:5000
+      MLFLOW_EXPERIMENT_NAME: olist-satisfaction
+      PYTHONIOENCODING:      utf-8
+    volumes:
+      - dagster_home:/dagster_home
+      # DuckDB : bind mount sur le fichier warehouse local (lecture-ecriture)
+      - ../warehouse/duckdb:/data/duckdb
+      # Donnees brutes Olist depuis data-engineering-platform (lecture seule)
+      - ../../data-engineering-platform/data/raw:/data/raw:ro
+    networks:
+      mlops_net:
+        ipv4_address: 172.29.1.10
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:3100/server_info || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ── Dagster Daemon (schedules + sensors + run queue) ────────────────────────
+  dagster-daemon:
+    image: mlops/dagster:latest
+    container_name: mlops_dagster_daemon
+    command: ["dagster-daemon", "run"]
+    restart: unless-stopped
+    environment:
+      DAGSTER_HOME:          /dagster_home
+      DUCKDB_PATH:           /data/duckdb/olist.duckdb
+      DATA_PATH:             /data/raw
+      MLFLOW_TRACKING_URI:   http://mlflow-server:5000
+      PYTHONIOENCODING:      utf-8
+    volumes:
+      - dagster_home:/dagster_home
+      - ../warehouse/duckdb:/data/duckdb
+      - ../../data-engineering-platform/data/raw:/data/raw:ro
+    networks:
+      mlops_net:
+        ipv4_address: 172.29.1.11
+    depends_on:
+      dagster-webserver:
+        condition: service_healthy
+
+  # ── MLflow Tracking Server ───────────────────────────────────────────────────
+  mlflow-server:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.mlflow
+    image: mlops/mlflow:latest
+    container_name: mlops_mlflow
+    restart: unless-stopped
+    # mlflow-artifacts:/ → le client utilise l'API proxy HTTP pour uploader les artefacts.
+    # Les artefacts sont stockés côté serveur dans --artifacts-destination (/mlflow/artifacts).
+    command:
+      - mlflow
+      - server
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "5000"
+      - --backend-store-uri
+      - sqlite:////mlflow/mlruns.db
+      - --artifacts-destination
+      - /mlflow/artifacts
+      - --default-artifact-root
+      - "mlflow-artifacts:/"
+      - --serve-artifacts
+    ports:
+      - "5100:5000"
+    volumes:
+      - mlflow_data:/mlflow
+    networks:
+      mlops_net:
+        ipv4_address: 172.29.1.20
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:5000/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # ── FastAPI — serving /predict + /health ─────────────────────────────────────
+  fastapi:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.fastapi
+    image: mlops/fastapi:latest
+    container_name: mlops_fastapi
+    restart: unless-stopped
+    ports:
+      - "8100:8000"
+    environment:
+      MLFLOW_TRACKING_URI:  http://mlflow-server:5000
+      MLFLOW_MODEL_NAME:    SatisfactionClassifier
+      MLFLOW_MODEL_STAGE:   Production
+      PYTHONIOENCODING:     utf-8
+    volumes:
+      # Acces en lecture aux artefacts MLflow pour charger le modele localement
+      - mlflow_data:/mlflow:ro
+    networks:
+      mlops_net:
+        ipv4_address: 172.29.1.30
+    depends_on:
+      mlflow-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8000/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
