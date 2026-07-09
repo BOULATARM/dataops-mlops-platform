@@ -1,0 +1,218 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [main]
+
+# La racine du repo GitHub IS mlops-dataops-platform/
+# $GITHUB_WORKSPACE = racine du projet dans tous les jobs
+
+env:
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  # ── 1. Lint ──────────────────────────────────────────────────────────────────
+  lint:
+    name: Lint (ruff)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install ruff
+        run: pip install ruff==0.4.4
+
+      - name: Lint dlt_pipelines/ ml/ api/
+        run: ruff check dlt_pipelines/ ml/ api/ --select E,F,W,I --ignore E501
+
+  # ── 2. test-dbt ──────────────────────────────────────────────────────────────
+  test-dbt:
+    name: dlt Bronze → dbt build (fixtures)
+    runs-on: ubuntu-latest
+    needs: lint
+
+    env:
+      DATA_PATH: ${{ github.workspace }}/tests/fixtures
+      DUCKDB_PATH: ${{ github.workspace }}/warehouse/duckdb/olist.duckdb
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dlt pipeline dependencies
+        run: pip install -r dlt_pipelines/requirements.txt
+
+      - name: Install dbt
+        run: pip install "dbt-duckdb==1.9.2" "dbt-core==1.11.11"
+
+      - name: Create warehouse directory
+        run: mkdir -p warehouse/duckdb
+
+      - name: Run dlt Bronze ingestion (fixtures CI)
+        run: python -m dlt_pipelines.pipelines.run_all_bronze
+
+      - name: Verify bronze row counts
+        run: |
+          python - <<'EOF'
+          import duckdb, os
+          db = os.environ["DUCKDB_PATH"]
+          con = duckdb.connect(db, read_only=True)
+          for t in ["raw_orders", "raw_customers", "raw_reviews", "raw_payments"]:
+              n = con.execute(f'SELECT COUNT(*) FROM bronze."{t}"').fetchone()[0]
+              print(f"  bronze.{t}: {n} rows")
+              assert n > 0, f"Table {t} est vide !"
+          con.close()
+          print("Bronze OK.")
+          EOF
+
+      - name: dbt deps
+        working-directory: dbt_project
+        run: dbt deps --profiles-dir .
+
+      - name: dbt build (Silver + Gold)
+        working-directory: dbt_project
+        run: dbt build --profiles-dir . --target dev
+
+  # ── 3. test-api ──────────────────────────────────────────────────────────────
+  test-api:
+    name: API tests (pytest + MockModel)
+    runs-on: ubuntu-latest
+    needs: lint
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install API + test dependencies
+        run: |
+          pip install \
+            "fastapi==0.111.0" \
+            "uvicorn[standard]==0.30.1" \
+            "mlflow==2.13.0" \
+            "scikit-learn==1.9.0" \
+            "pandas==2.2.2" \
+            "pydantic==2.7.1" \
+            "python-dotenv==1.0.1" \
+            "numpy" \
+            "pytest==8.2.0" \
+            "httpx==0.27.0"
+
+      - name: Run API tests
+        env:
+          MLFLOW_TRACKING_URI: "http://localhost:5100"
+        run: python -m pytest tests/test_api.py -v --tb=short
+
+  # ── 4. build-docker ──────────────────────────────────────────────────────────
+  build-docker:
+    name: Docker build (no push)
+    runs-on: ubuntu-latest
+    needs: [test-dbt, test-api]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Dockerfile.fastapi
+        run: docker build -f docker/Dockerfile.fastapi -t olist-api:ci .
+
+      - name: Build Dockerfile.dagster
+        run: docker build -f docker/Dockerfile.dagster -t olist-dagster:ci .
+
+  # ── 5. smoke-test-api ────────────────────────────────────────────────────────
+  smoke-test-api:
+    name: Smoke test API container (/health)
+    runs-on: ubuntu-latest
+    needs: build-docker
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Dockerfile.fastapi
+        run: docker build -f docker/Dockerfile.fastapi -t olist-api:ci .
+
+      - name: Start API container
+        run: |
+          docker run -d \
+            --name olist-api-smoke \
+            -p 8100:8000 \
+            -e MLFLOW_TRACKING_URI=http://localhost:5000 \
+            -e MLFLOW_MODEL_NAME=SatisfactionClassifier \
+            -e MLFLOW_HTTP_REQUEST_MAX_RETRIES=0 \
+            olist-api:ci
+
+      - name: Wait for API to be ready (max 60s)
+        run: |
+          READY=0
+          for i in $(seq 1 30); do
+            HTTP=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8100/health 2>/dev/null || true)
+            if [ "$HTTP" = "200" ]; then
+              echo "API ready after $((i*2))s (HTTP 200)"
+              READY=1
+              break
+            fi
+            echo "Waiting... $((i*2))s (HTTP=${HTTP:-000})"
+            sleep 2
+          done
+          if [ "$READY" = "0" ]; then
+            echo "=== TIMEOUT: API not ready after 60s — container logs ==="
+            docker logs olist-api-smoke
+            echo "=== docker ps ==="
+            docker ps -a
+            exit 1
+          fi
+
+      - name: Debug — container logs before verify
+        run: |
+          echo "=== docker ps ==="
+          docker ps -a --filter name=olist-api-smoke
+          echo "=== container logs ==="
+          docker logs olist-api-smoke
+
+      - name: Verify /health returns status=ok
+        run: |
+          BODY=$(curl -s -w "\nHTTP_CODE:%{http_code}\n" http://localhost:8100/health)
+          echo "$BODY"
+          HTTP_CODE=$(echo "$BODY" | grep "^HTTP_CODE:" | cut -d: -f2)
+          JSON=$(echo "$BODY" | grep -v "^HTTP_CODE:")
+          [ "$HTTP_CODE" = "200" ] || (echo "HTTP inattendu: $HTTP_CODE" && exit 1)
+          STATUS=$(echo "$JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['status'])")
+          echo "status=$STATUS"
+          [ "$STATUS" = "ok" ] || (echo "health check failed" && exit 1)
+
+      - name: Verify model_loaded=False without MLflow
+        run: |
+          BODY=$(curl -s http://localhost:8100/health)
+          echo "raw response: $BODY"
+          LOADED=$(echo "$BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['model_loaded'])")
+          echo "model_loaded=$LOADED (attendu False sans MLflow)"
+
+      - name: Call /predict (503 attendu sans modèle, endpoint accessible)
+        run: |
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST http://localhost:8100/predict \
+            -H "Content-Type: application/json" \
+            -d '{"delivery_delay_days":-10,"review_comment_length":0,"has_comment":false,"payment_type_encoded":0}')
+          echo "HTTP $HTTP_CODE"
+          [ "$HTTP_CODE" = "503" ] || [ "$HTTP_CODE" = "200" ] \
+            || (echo "Code HTTP inattendu: $HTTP_CODE" && exit 1)
+
+      - name: Collect container logs on failure
+        if: failure()
+        run: docker logs olist-api-smoke
+
+      - name: Cleanup
+        if: always()
+        run: docker rm -f olist-api-smoke || true
