@@ -1,0 +1,39 @@
+FROM python:3.11-slim
+
+LABEL description="Dagster webserver + daemon - pipeline medallion Olist"
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        curl git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Requirements avant code source pour maximiser le cache Docker
+COPY dlt_pipelines/requirements.txt /tmp/dlt_req.txt
+COPY ml/requirements.txt            /tmp/ml_req.txt
+
+RUN pip install --no-cache-dir -r /tmp/dlt_req.txt
+RUN pip install --no-cache-dir -r /tmp/ml_req.txt
+
+# dbt-duckdb installe aussi dbt-core
+RUN pip install --no-cache-dir "dbt-core==1.11.11" "dbt-duckdb==1.9.2"
+
+# Dagster (meme version que locale)
+RUN pip install --no-cache-dir "dagster==1.13.6" "dagster-webserver==1.13.6"
+
+# Code source
+COPY dagster_project/  /app/dagster_project/
+COPY dbt_project/      /app/dbt_project/
+COPY dlt_pipelines/    /app/dlt_pipelines/
+COPY pyproject.toml    /app/
+
+# Pre-installer les packages dbt pour eviter le download au premier run
+RUN cd /app/dbt_project && dbt deps --profiles-dir . --no-write-json
+
+ENV DAGSTER_HOME=/dagster_home
+RUN mkdir -p /dagster_home /data/duckdb /data/raw
+
+EXPOSE 3100
+
+# Surcharge via command: dans docker-compose (webserver ou daemon)
+CMD ["dagster-webserver", "-h", "0.0.0.0", "-p", "3100"]
