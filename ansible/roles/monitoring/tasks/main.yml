@@ -1,0 +1,29 @@
+---
+# Installe deux outils simples pour surveiller RAM, CPU et espace disque.
+- name: Install monitoring packages
+  ansible.builtin.apt:
+    name:
+      - htop
+      - ncdu
+    state: present
+
+# Cree un script de verification rapide de FastAPI.
+- name: Create FastAPI health check script
+  ansible.builtin.copy:
+    dest: /usr/local/bin/check_services.sh
+    owner: root
+    group: root
+    mode: "0755"
+    content: |
+      #!/bin/bash
+      set -e
+
+      echo "FastAPI health check:"
+      if curl -fsS http://localhost:8100/health >/tmp/fastapi_health.json; then
+        echo "OK - FastAPI responds on http://localhost:8100/health"
+        cat /tmp/fastapi_health.json
+        echo
+      else
+        echo "ERROR - FastAPI does not respond on http://localhost:8100/health"
+        exit 1
+      fi

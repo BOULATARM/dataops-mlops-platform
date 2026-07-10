@@ -1,0 +1,12 @@
+---
+# Playbook principal pour configurer l'EC2 et deployer uniquement FastAPI.
+# Ordre volontaire: base systeme -> Docker -> application -> monitoring simple.
+- name: Deploy FastAPI on AWS EC2 Free Tier
+  hosts: fastapi_server
+  become: true
+
+  roles:
+    - common
+    - docker
+    - app
+    - monitoring
