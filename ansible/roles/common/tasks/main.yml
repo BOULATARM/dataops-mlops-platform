@@ -1,0 +1,33 @@
+---
+# Met a jour le cache apt pour connaitre les derniers paquets disponibles.
+- name: Update apt cache
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+
+# Installe les outils de base utiles pour administrer et diagnostiquer le serveur.
+- name: Install common packages
+  ansible.builtin.apt:
+    name:
+      - git
+      - curl
+      - htop
+      - python3-pip
+      - ca-certificates
+      - gnupg
+      - lsb-release
+    state: present
+
+# Configure le fuseau horaire demande pour garder des logs lisibles au Maroc.
+- name: Configure timezone
+  ansible.builtin.command: timedatectl set-timezone Europe/Casablanca
+  changed_when: false
+
+# Cree le dossier parent qui contiendra le repo applicatif.
+- name: Create /app directory
+  ansible.builtin.file:
+    path: /app
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+    mode: "0755"

@@ -1,0 +1,72 @@
+---
+# Clone le depot applicatif dans /app. force=false evite d'ecraser un travail local.
+- name: Clone application repository
+  ansible.builtin.git:
+    repo: https://github.com/BOULATARM/dataops-mlops-platform.git
+    dest: /app/dataops-mlops-platform
+    version: main
+    force: false
+  become_user: ubuntu
+
+# Copie le fichier d'exemple vers .env si .env n'existe pas encore.
+- name: Create .env from .env.example
+  ansible.builtin.copy:
+    src: /app/dataops-mlops-platform/.env.example
+    dest: /app/dataops-mlops-platform/.env
+    remote_src: true
+    owner: ubuntu
+    group: ubuntu
+    mode: "0644"
+    force: false
+
+# Cree le dossier qui recevra les fichiers CSV Olist uploades par scp.
+- name: Create Olist data directory
+  ansible.builtin.file:
+    path: /data/olist
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+    mode: "0755"
+
+# Cree un Compose de production leger: FastAPI seulement.
+# Le docker-compose complet du repo demarre aussi MLflow et Dagster, trop lourd pour t2.micro.
+- name: Create lightweight production Docker Compose file
+  ansible.builtin.copy:
+    dest: /app/dataops-mlops-platform/docker-compose.ec2.yml
+    owner: ubuntu
+    group: ubuntu
+    mode: "0644"
+    content: |
+      services:
+        fastapi:
+          build:
+            context: .
+            dockerfile: docker/Dockerfile.fastapi
+          container_name: mlops_fastapi
+          restart: unless-stopped
+          ports:
+            - "8100:8000"
+          environment:
+            MLFLOW_TRACKING_URI: "http://127.0.0.1:5100"
+            MLFLOW_MODEL_NAME: "SatisfactionClassifier"
+            MLFLOW_MODEL_STAGE: "Production"
+            PYTHONIOENCODING: "utf-8"
+
+# Build et lance uniquement le service FastAPI.
+- name: Start FastAPI service only
+  ansible.builtin.command:
+    cmd: docker compose -f docker-compose.ec2.yml up -d --build fastapi
+    chdir: /app/dataops-mlops-platform
+  register: compose_result
+  changed_when: "'Started' in compose_result.stdout or 'Built' in compose_result.stdout or 'Recreated' in compose_result.stdout or 'Created' in compose_result.stdout"
+
+# Attend que l'API reponde. /health renvoie 200 meme si le modele MLflow n'est pas charge.
+- name: Wait for FastAPI health endpoint
+  ansible.builtin.uri:
+    url: http://localhost:8100/health
+    method: GET
+    status_code: 200
+  register: health_check
+  retries: 12
+  delay: 5
+  until: health_check.status == 200
