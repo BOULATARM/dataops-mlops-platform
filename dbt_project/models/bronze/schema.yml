@@ -171,3 +171,8 @@ models:
     columns:
       - name: currency_code
         tests: [not_null]
+  - name: bronze_category_translation
+    description: "Vue Bronze sur raw_category_translation"
+    columns:
+      - name: product_category_name
+        tests: [not_null]
