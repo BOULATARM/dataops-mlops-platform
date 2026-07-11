@@ -3,7 +3,6 @@ from functools import lru_cache
 import torch
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 
-
 FR_EN_MODEL = "Helsinki-NLP/opus-mt-fr-en"
 EN_PT_MODEL = "Helsinki-NLP/opus-mt-en-ROMANCE"
 
