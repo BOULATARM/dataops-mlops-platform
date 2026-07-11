@@ -12,6 +12,7 @@ from fastapi import FastAPI, HTTPException
 
 from api.model_loader import ModelLoader
 from api.schemas import HealthResponse, PredictRequest, PredictResponse
+from api.translator import translate_french_to_portuguese
 
 logging.basicConfig(
     level=logging.INFO,
@@ -88,11 +89,18 @@ def predict(request: PredictRequest) -> PredictResponse:
             },
         )
 
+    original_comment = request.review_comment_message.strip()
+
+    translated_comment = translate_french_to_portuguese(
+        original_comment
+    )
+
     row = {
-        "delivery_delay_days":   request.delivery_delay_days,
-        "review_comment_length": request.review_comment_length,
-        "has_comment":           int(request.has_comment),
-        "payment_type_encoded":  request.payment_type_encoded,
+        "review_comment_message": translated_comment,
+        "delivery_delay_days": request.delivery_delay_days,
+        "review_comment_length": len(translated_comment),
+        "has_comment": int(bool(translated_comment)),
+        "payment_type_encoded": request.payment_type_encoded,
     }
 
     try:

@@ -43,7 +43,7 @@ class ModelLoader:
 
             model_uri = f"models:/{model_name}/{model_stage}"
             logger.info("Chargement modele depuis %s", model_uri)
-            self.model         = mlflow.sklearn.load_model(model_uri)
+            self.model         = mlflow.pyfunc.load_model(model_uri)
             self.is_loaded     = True
             self.model_name    = model_name
             self.model_version = model_stage
@@ -82,6 +82,12 @@ class ModelLoader:
             raise RuntimeError("Modele non charge")
 
         X = self._to_dataframe(row)
-        pred  = bool(self.model.predict(X)[0])
-        proba = float(self.model.predict_proba(X)[0, 1])
+        result = self.model.predict(X)
+        if hasattr(self.model, 'predict_proba'):
+            proba = float(self.model.predict_proba(X)[0, 1])
+        else:
+            import numpy as np
+            pred_val = result[0] if hasattr(result, '__len__') else result
+            proba = float(pred_val) if isinstance(pred_val, (int, float, np.integer, np.floating)) else 0.5
+        pred = bool(int(round(proba)) if proba != 0.5 else result[0])
         return pred, round(proba, 4)

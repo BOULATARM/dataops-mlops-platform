@@ -1,14 +1,7 @@
-"""
-Ordre canonique des features pour le modèle SatisfactionClassifier.
-
-Cette liste est la source unique de vérité partagée entre :
-  - ml/training/config.py  (entraînement — NUMERIC_FEATURES doit correspondre)
-  - api/model_loader.py    (inférence — construction du DataFrame d'entrée)
-
-Changer l'ordre ici sans réentraîner le modèle produit des prédictions fausses.
-"""
+"""Ordre canonique des features pour le modele SatisfactionClassifier."""
 
 FEATURE_ORDER: list[str] = [
+    "review_comment_message",
     "delivery_delay_days",
     "review_comment_length",
     "has_comment",
