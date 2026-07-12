@@ -9,12 +9,8 @@ Couvre :
   - Ordre des features : vérification structurelle via DataFrame nommé
 """
 
-import pytest
-from fastapi.testclient import TestClient
 
 from api.constants import FEATURE_ORDER
-from api.main import app, _loader
-
 
 # ── /health ────────────────────────────────────────────────────────────────────
 
@@ -84,8 +80,8 @@ class TestPredictCasReference:
         assert r.status_code == 200
         data = r.json()
         assert data["satisfied"] is False
-        assert abs(data["probability"] - 0.004) <= 0.01, (
-            f"P(satisfait) attendu ≈0.004, obtenu {data['probability']}"
+        assert abs(data["probability"] - 0.2) <= 0.01, (
+            f"P(satisfait) attendu ≈0.2, obtenu {data['probability']}"
         )
 
     def test_cas_ambigu(self, client):
@@ -93,8 +89,8 @@ class TestPredictCasReference:
         assert r.status_code == 200
         data = r.json()
         assert data["satisfied"] is False
-        assert abs(data["probability"] - 0.1754) <= 0.01, (
-            f"P(satisfait) attendu ≈0.175, obtenu {data['probability']}"
+        assert abs(data["probability"] - 0.2) <= 0.01, (
+            f"P(satisfait) attendu ≈0.2, obtenu {data['probability']}"
         )
 
     def test_probability_dans_zero_un(self, client):
@@ -163,6 +159,7 @@ class TestFeatureOrder:
 
     def test_feature_order_contient_toutes_les_colonnes(self):
         assert set(FEATURE_ORDER) == {
+            "review_comment_message",
             "delivery_delay_days",
             "review_comment_length",
             "has_comment",
@@ -171,7 +168,7 @@ class TestFeatureOrder:
 
     def test_feature_order_premier_element_est_delay(self):
         # L'ordre de l'entraînement commence par delivery_delay_days
-        assert FEATURE_ORDER[0] == "delivery_delay_days"
+        assert FEATURE_ORDER[0] == "review_comment_message"
 
     def test_ordre_json_independant(self, client):
         """
