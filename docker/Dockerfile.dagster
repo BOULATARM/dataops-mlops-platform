@@ -25,6 +25,7 @@ RUN pip install --no-cache-dir "dagster==1.13.6" "dagster-webserver==1.13.6"
 COPY dagster_project/  /app/dagster_project/
 COPY dbt_project/      /app/dbt_project/
 COPY dlt_pipelines/    /app/dlt_pipelines/
+COPY ml/               /app/ml/
 COPY pyproject.toml    /app/
 
 # Pre-installer les packages dbt pour eviter le download au premier run

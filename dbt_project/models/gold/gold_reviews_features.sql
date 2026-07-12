@@ -53,6 +53,7 @@ SELECT
     CASE WHEN r.review_score >= 4 THEN 1 ELSE 0 END                AS satisfied,
 
     -- ── Features texte ──────────────────────────────────────────────────────
+    COALESCE(r.review_comment_message, '') AS review_comment_message,
     LENGTH(COALESCE(r.review_comment_message, ''))                  AS review_comment_length,
     CASE
         WHEN r.review_comment_message IS NOT NULL

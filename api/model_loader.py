@@ -1,7 +1,4 @@
-"""
-Chargement du modele depuis le MLflow Model Registry.
-/health repond meme si le modele n'est pas encore disponible (model_loaded: false).
-"""
+"""Chargement du modèle depuis MLflow."""
 
 import logging
 import os
@@ -14,80 +11,121 @@ logger = logging.getLogger(__name__)
 
 
 class ModelLoader:
-    """
-    Charge et met en cache le modele scikit-learn depuis MLflow.
-    Resilient : echec silencieux au demarrage, is_loaded=False → /predict renvoie 503.
-
-    Méthode de prédiction : construit un pd.DataFrame avec les colonnes nommées
-    dans FEATURE_ORDER. Le modèle reçoit toujours les features dans l'ordre
-    d'entraînement, quelle que soit l'ordre des champs dans la requête JSON.
-    """
-
     def __init__(self) -> None:
         self.model = None
-        self.is_loaded: bool = False
+        self.is_loaded = False
         self.model_name: str | None = None
         self.model_version: str | None = None
+        self.model_flavor: str | None = None
         self.load_error: str | None = None
 
     def reload(self) -> None:
-        """Charge (ou recharge) le modele depuis MLflow. Echec silencieux."""
-        tracking_uri = os.getenv("MLFLOW_TRACKING_URI", "http://mlflow-server:5000")
-        model_name   = os.getenv("MLFLOW_MODEL_NAME",   "SatisfactionClassifier")
-        model_stage  = os.getenv("MLFLOW_MODEL_STAGE",  "Production")
+        tracking_uri = os.getenv(
+            "MLFLOW_TRACKING_URI",
+            "http://mlflow-server:5000",
+        )
+
+        model_name = os.getenv(
+            "MLFLOW_MODEL_NAME",
+            "SatisfactionClassifier",
+        )
+
+        model_stage = os.getenv(
+            "MLFLOW_MODEL_STAGE",
+            "Production",
+        )
 
         try:
             import mlflow
             import mlflow.sklearn
+
             mlflow.set_tracking_uri(tracking_uri)
 
-            model_uri = f"models:/{model_name}/{model_stage}"
-            logger.info("Chargement modele depuis %s", model_uri)
-            self.model         = mlflow.pyfunc.load_model(model_uri)
-            self.is_loaded     = True
-            self.model_name    = model_name
+            model_uri = (
+                f"models:/{model_name}/{model_stage}"
+            )
+
+            logger.info(
+                "Chargement du modèle %s",
+                model_uri,
+            )
+
+            try:
+                self.model = (
+                    mlflow.sklearn.load_model(
+                        model_uri
+                    )
+                )
+                self.model_flavor = "sklearn"
+            except Exception as sklearn_error:
+                logger.warning(
+                    "Flavor sklearn indisponible : %s. "
+                    "Tentative PyFunc.",
+                    sklearn_error,
+                )
+
+                self.model = mlflow.pyfunc.load_model(
+                    model_uri
+                )
+                self.model_flavor = "python_function"
+
+            self.is_loaded = True
+            self.model_name = model_name
             self.model_version = model_stage
-            self.load_error    = None
-            logger.info("Modele '%s/%s' charge. FEATURE_ORDER=%s", model_name, model_stage, FEATURE_ORDER)
+            self.load_error = None
+
+            logger.info(
+                "Modèle chargé. Flavor=%s",
+                self.model_flavor,
+            )
 
         except Exception as exc:
-            self.is_loaded  = False
+            self.model = None
+            self.is_loaded = False
             self.load_error = str(exc)
-            logger.warning("Modele non disponible : %s", exc)
 
-    # Alias pour compatibilite avec les appels try_load() existants
+            logger.warning(
+                "Modèle non disponible : %s",
+                exc,
+            )
+
     try_load = reload
 
-    def _to_dataframe(self, row: dict) -> pd.DataFrame:
-        """
-        Construit un DataFrame 1-ligne dans l'ordre exact de FEATURE_ORDER.
-        C'est le seul endroit où les valeurs sont mises en position — pas dans /predict.
-        """
-        return pd.DataFrame([{col: row[col] for col in FEATURE_ORDER}])
+    def _to_dataframe(
+        self,
+        row: dict,
+    ) -> pd.DataFrame:
+        return pd.DataFrame(
+            [
+                {
+                    column: row[column]
+                    for column in FEATURE_ORDER
+                }
+            ]
+        )
 
-    def predict_one(self, row: dict) -> tuple[bool, float]:
-        """
-        Prédit pour un seul échantillon.
-
-        Args:
-            row: dict avec les clés de FEATURE_ORDER (+ éventuellement d'autres clés ignorées)
-
-        Returns:
-            (satisfied: bool, probability: float)
-
-        Raises:
-            RuntimeError si le modele n'est pas charge.
-        """
+    def predict_one(
+        self,
+        row: dict,
+    ) -> tuple[bool, float]:
         if not self.is_loaded or self.model is None:
-            raise RuntimeError("Modele non charge")
+            raise RuntimeError(
+                "Modèle non chargé"
+            )
 
         X = self._to_dataframe(row)
-        result = self.model.predict(X)
-        if hasattr(self.model, 'predict_proba'):
-            proba = float(self.model.predict_proba(X)[0, 1])
+
+        predictions = self.model.predict(X)
+        predicted_class = int(predictions[0])
+
+        if hasattr(self.model, "predict_proba"):
+            probability = float(
+                self.model.predict_proba(X)[0, 1]
+            )
         else:
-            import numpy as np
-            pred_val = result[0] if hasattr(result, '__len__') else result
-            proba = float(pred_val) if isinstance(pred_val, (int, float, np.integer, np.floating)) else 0.5
-        pred = bool(int(round(proba)) if proba != 0.5 else result[0])
-        return pred, round(proba, 4)
+            probability = float(predicted_class)
+
+        return (
+            bool(predicted_class),
+            round(probability, 4),
+        )
