@@ -6,29 +6,31 @@ Stratégie anti-verrou DuckDB : un seul processus dbt à la fois (pas de
 parallélisme inter-modèles possible avec DuckDB en mode write).
 """
 
-import subprocess
 import os
+import subprocess
 from pathlib import Path
 
-from dagster import asset, AssetExecutionContext, Output, MetadataValue
+from dagster import AssetExecutionContext, MetadataValue, Output, asset
 
 from dagster_project.assets.bronze_assets import (
-    bronze_raw_customers,
-    bronze_raw_orders,
-    bronze_raw_order_items,
-    bronze_raw_payments,
-    bronze_raw_reviews,
-    bronze_raw_products,
-    bronze_raw_sellers,
     bronze_raw_category_translation,
+    bronze_raw_customers,
     bronze_raw_exchange_rates,
-    bronze_raw_products_json,
     bronze_raw_geolocation,
+    bronze_raw_order_items,
+    bronze_raw_orders,
+    bronze_raw_payments,
+    bronze_raw_products,
+    bronze_raw_products_json,
+    bronze_raw_reviews,
+    bronze_raw_sellers,
 )
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 _DBT_DIR = _PROJECT_ROOT / "dbt_project"
-_DB_PATH = str(_PROJECT_ROOT / "warehouse" / "duckdb" / "olist.duckdb")
+_DB_PATH = os.environ.get("DUCKDB_PATH") or str(
+    _PROJECT_ROOT / "warehouse" / "duckdb" / "olist.duckdb"
+)
 
 
 def _dbt_build(select: str, context: AssetExecutionContext) -> str:
@@ -104,7 +106,7 @@ def _row_counts(tables: list[tuple[str, str]]) -> dict:
     kinds={"dbt", "duckdb"},
 )
 def silver_layer(context: AssetExecutionContext):
-    _dbt_build("tag:silver", context)
+    _dbt_build("+tag:silver", context)
 
     counts = _row_counts([
         ("main_silver", "silver_orders"),

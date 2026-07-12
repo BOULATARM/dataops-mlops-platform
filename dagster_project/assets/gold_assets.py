@@ -5,17 +5,19 @@ Un seul asset `gold_layer` qui exécute `dbt build --select tag:gold`.
 Même stratégie anti-verrou que silver_assets.py.
 """
 
-import subprocess
 import os
+import subprocess
 from pathlib import Path
 
-from dagster import asset, AssetExecutionContext, Output, MetadataValue
+from dagster import AssetExecutionContext, MetadataValue, Output, asset
 
 from dagster_project.assets.silver_assets import silver_layer
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 _DBT_DIR = _PROJECT_ROOT / "dbt_project"
-_DB_PATH = str(_PROJECT_ROOT / "warehouse" / "duckdb" / "olist.duckdb")
+_DB_PATH = os.environ.get("DUCKDB_PATH") or str(
+    _PROJECT_ROOT / "warehouse" / "duckdb" / "olist.duckdb"
+)
 
 
 def _dbt_build(select: str, context: AssetExecutionContext) -> str:

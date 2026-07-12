@@ -75,14 +75,28 @@ SELECT
     END                                                             AS delivery_delay_days,
 
     -- ── Feature paiement (encodé en dur pour sklearn) ────────────────────────
-    COALESCE(tp.payment_type, 'unknown')                            AS payment_type,
-    CASE COALESCE(tp.payment_type, 'unknown')
-        WHEN 'credit_card'  THEN 0
-        WHEN 'boleto'       THEN 1
-        WHEN 'voucher'      THEN 2
-        WHEN 'debit_card'   THEN 3
+    CASE
+        WHEN LOWER(TRIM(COALESCE(tp.payment_type, ''))) IN (
+            'credit_card',
+            'boleto',
+            'voucher',
+            'debit_card'
+        )
+        THEN LOWER(TRIM(tp.payment_type))
+        ELSE 'not_defined'
+    END AS payment_type,
+
+    CASE
+        WHEN LOWER(TRIM(COALESCE(tp.payment_type, ''))) = 'credit_card'
+            THEN 0
+        WHEN LOWER(TRIM(COALESCE(tp.payment_type, ''))) = 'boleto'
+            THEN 1
+        WHEN LOWER(TRIM(COALESCE(tp.payment_type, ''))) = 'voucher'
+            THEN 2
+        WHEN LOWER(TRIM(COALESCE(tp.payment_type, ''))) = 'debit_card'
+            THEN 3
         ELSE 4
-    END                                                             AS payment_type_encoded,
+    END AS payment_type_encoded,
 
     -- ── Métadonnées ──────────────────────────────────────────────────────────
     o.order_status,
