@@ -3,7 +3,7 @@ Schedule quotidien 02:00 UTC pour le full_pipeline_job.
 Défini mais non activé en production — activation via l'UI Dagster.
 """
 
-from dagster import ScheduleDefinition, DefaultScheduleStatus
+from dagster import DefaultScheduleStatus, ScheduleDefinition
 
 from dagster_project.jobs.full_pipeline_job import full_pipeline_job
 

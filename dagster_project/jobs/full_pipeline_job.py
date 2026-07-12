@@ -1,6 +1,10 @@
-"""Pipeline DataOps et MLOps complet."""
+"""Pipeline DataOps, monitoring et MLOps complet."""
 
-from dagster import AssetSelection, define_asset_job, in_process_executor
+from dagster import (
+    AssetSelection,
+    define_asset_job,
+    in_process_executor,
+)
 
 full_pipeline_job = define_asset_job(
     name="full_pipeline_job",
@@ -8,17 +12,19 @@ full_pipeline_job = define_asset_job(
         "bronze",
         "silver",
         "gold",
+        "monitoring",
         "ml",
     ),
     executor_def=in_process_executor,
     description=(
-        "Pipeline complet exécuté séquentiellement : "
-        "ingestion Bronze, transformations Silver et Gold, "
-        "entraînement MLflow et rechargement FastAPI."
+        "Pipeline séquentiel : Bronze, Silver, Gold, "
+        "détection de dérive, entraînement MLflow "
+        "et rechargement FastAPI."
     ),
     tags={
         "pipeline": "medallion",
         "team": "data-engineering",
         "includes_ml": "true",
+        "includes_drift": "true",
     },
 )

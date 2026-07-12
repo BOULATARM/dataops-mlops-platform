@@ -8,8 +8,8 @@ immédiatement. La ressource ne garde pas de connexion longue ouverte —
 elle expose uniquement le chemin absolu et une factory read_only.
 """
 
-from pathlib import Path
 from contextlib import contextmanager
+from pathlib import Path
 
 import duckdb
 from dagster import ConfigurableResource

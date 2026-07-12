@@ -11,21 +11,24 @@ from dagster import (
     asset,
 )
 
-from dagster_project.assets.gold_assets import gold_layer
+from dagster_project.assets.monitoring_assets import (
+    data_drift_check,
+)
 
 
 @asset(
     group_name="ml",
-    deps=[gold_layer],
-    kinds={"mlflow", "scikit-learn"},
+    deps=[data_drift_check],
+    kinds={
+        "mlflow",
+        "scikit-learn",
+    },
     description=(
         "Entraîne le modèle TF-IDF depuis Gold, "
         "évalue ses performances et crée une version MLflow."
     ),
 )
-def ml_training(
-    context,
-) -> Output[dict[str, Any]]:
+def ml_training(context):
     from ml.training.train_v2 import (
         train_and_register,
     )
@@ -34,19 +37,44 @@ def ml_training(
 
     metadata: dict[str, MetadataValue] = {
         "status": MetadataValue.text(
-            str(result.get("status"))
+            str(
+                result.get(
+                    "status",
+                    "",
+                )
+            )
         ),
         "rows": MetadataValue.int(
-            int(result.get("rows", 0))
+            int(
+                result.get(
+                    "rows",
+                    0,
+                )
+            )
         ),
         "version": MetadataValue.text(
-            str(result.get("version", ""))
+            str(
+                result.get(
+                    "version",
+                    "",
+                )
+            )
         ),
         "promoted": MetadataValue.text(
-            str(result.get("promoted", False))
+            str(
+                result.get(
+                    "promoted",
+                    False,
+                )
+            )
         ),
         "fingerprint": MetadataValue.text(
-            str(result.get("fingerprint", ""))[:16]
+            str(
+                result.get(
+                    "fingerprint",
+                    "",
+                )
+            )[:16]
         ),
     }
 
@@ -54,9 +82,17 @@ def ml_training(
         "metrics",
         {},
     ).items():
-        if isinstance(value, (int, float)):
-            metadata[name] = MetadataValue.float(
-                float(value)
+        if isinstance(
+            value,
+            (
+                int,
+                float,
+            ),
+        ):
+            metadata[name] = (
+                MetadataValue.float(
+                    float(value)
+                )
             )
 
     context.log.info(
@@ -75,7 +111,10 @@ def ml_training(
 
 @asset(
     group_name="ml",
-    kinds={"fastapi", "mlflow"},
+    kinds={
+        "fastapi",
+        "mlflow",
+    },
     description=(
         "Recharge FastAPI lorsque le nouveau modèle "
         "a été promu dans MLflow."
@@ -84,12 +123,15 @@ def ml_training(
 def api_model_reload(
     context,
     ml_training: dict[str, Any],
-) -> Output[dict[str, Any]]:
-    if not ml_training.get("promoted", False):
+):
+    if not ml_training.get(
+        "promoted",
+        False,
+    ):
         result = {
             "reloaded": False,
             "reason": (
-                "aucune nouvelle version promue"
+                "Aucune nouvelle version promue"
             ),
         }
 
@@ -126,16 +168,52 @@ def api_model_reload(
             )
     except Exception as exc:
         raise RuntimeError(
-            f"Échec du rechargement FastAPI : {exc}"
+            "Échec du rechargement FastAPI : "
+            f"{exc}"
         ) from exc
 
-    result = json.loads(payload)
+    result = json.loads(
+        payload
+    )
 
-    if not result.get("reloaded", False):
+    if not result.get(
+        "reloaded",
+        False,
+    ):
         raise RuntimeError(
             "FastAPI n'a pas chargé le nouveau modèle : "
             f"{result}"
         )
+
+    # Le nouveau modèle devient la nouvelle référence
+    # des distributions de données.
+    try:
+        from ml.monitoring.drift import (
+            refresh_baseline,
+        )
+
+        baseline_result = (
+            refresh_baseline()
+        )
+
+        result[
+            "drift_baseline"
+        ] = baseline_result
+
+        context.log.info(
+            "Baseline de dérive mise à jour : %s",
+            baseline_result,
+        )
+    except Exception as exc:
+        context.log.warning(
+            "Le modèle a été rechargé, mais la baseline "
+            "de dérive n'a pas été mise à jour : %s",
+            exc,
+        )
+
+        result[
+            "drift_baseline_error"
+        ] = str(exc)
 
     context.log.info(
         "FastAPI rechargée : %s",
@@ -149,7 +227,12 @@ def api_model_reload(
                 "True"
             ),
             "model_name": MetadataValue.text(
-                str(result.get("model_name", ""))
+                str(
+                    result.get(
+                        "model_name",
+                        "",
+                    )
+                )
             ),
         },
     )

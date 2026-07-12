@@ -11,6 +11,9 @@ from dagster_project.assets.gold_assets import (
 from dagster_project.assets.ml_assets import (
     ML_ASSETS,
 )
+from dagster_project.assets.monitoring_assets import (
+    MONITORING_ASSETS,
+)
 from dagster_project.assets.silver_assets import (
     SILVER_ASSETS,
 )
@@ -29,6 +32,7 @@ defs = Definitions(
         *BRONZE_ASSETS,
         *SILVER_ASSETS,
         *GOLD_ASSETS,
+        *MONITORING_ASSETS,
         *ML_ASSETS,
     ],
     jobs=[
