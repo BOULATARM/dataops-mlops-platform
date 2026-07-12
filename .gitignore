@@ -45,3 +45,6 @@ Thumbs.db
 *.backup
 *.backup-*
 api-before-v2-fr-*/
+
+# Données locales
+data/
