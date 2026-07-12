@@ -40,3 +40,8 @@ Thumbs.db
 .vscode/
 .idea/
 *.code-workspace
+
+# Sauvegardes locales
+*.backup
+*.backup-*
+api-before-v2-fr-*/

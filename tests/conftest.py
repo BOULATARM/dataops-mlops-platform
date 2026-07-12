@@ -11,8 +11,7 @@ import pandas as pd
 import pytest
 from fastapi.testclient import TestClient
 
-from api.main import app, _loader
-from api.constants import FEATURE_ORDER
+from api.main import _loader, app
 
 
 class MockModel:
@@ -83,3 +82,15 @@ def client_no_model():
     _loader.model_version = None
     _loader.load_error    = "Test: modele absent"
     return TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def mock_french_translation(monkeypatch):
+    """
+    Les tests API ne téléchargent pas les modèles Hugging Face.
+    La traduction réelle est testée séparément en intégration.
+    """
+    monkeypatch.setattr(
+        "api.main.translate_french_to_portuguese",
+        lambda text: text,
+    )

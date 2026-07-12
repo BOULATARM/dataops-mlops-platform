@@ -1,27 +1,38 @@
 from functools import lru_cache
+from typing import Any
 
-import torch
-from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
-
-FR_EN_MODEL = "Helsinki-NLP/opus-mt-fr-en"
-EN_PT_MODEL = "Helsinki-NLP/opus-mt-en-ROMANCE"
+FR_EN_MODEL_NAME = "Helsinki-NLP/opus-mt-fr-en"
+EN_PT_MODEL_NAME = "Helsinki-NLP/opus-mt-en-ROMANCE"
 
 
 @lru_cache(maxsize=1)
-def load_translation_models():
+def _load_translation_models() -> tuple[Any, Any, Any, Any, Any]:
     """
-    Charge les deux modèles une seule fois :
-    français → anglais → portugais brésilien.
+    Charge les dépendances et les modèles seulement lors de la première
+    traduction.
+
+    Cela évite d'exiger torch et transformers au simple import de FastAPI,
+    notamment pendant les tests unitaires GitHub Actions.
     """
-    fr_en_tokenizer = AutoTokenizer.from_pretrained(FR_EN_MODEL)
-    fr_en_model = AutoModelForSeq2SeqLM.from_pretrained(FR_EN_MODEL)
+    try:
+        import torch
+        from transformers import MarianMTModel, MarianTokenizer
+    except ModuleNotFoundError as exc:
+        raise RuntimeError(
+            "Les dépendances de traduction sont absentes. "
+            "Installez torch, transformers, sentencepiece et sacremoses."
+        ) from exc
+
+    fr_en_tokenizer = MarianTokenizer.from_pretrained(FR_EN_MODEL_NAME)
+    fr_en_model = MarianMTModel.from_pretrained(FR_EN_MODEL_NAME)
     fr_en_model.eval()
 
-    en_pt_tokenizer = AutoTokenizer.from_pretrained(EN_PT_MODEL)
-    en_pt_model = AutoModelForSeq2SeqLM.from_pretrained(EN_PT_MODEL)
+    en_pt_tokenizer = MarianTokenizer.from_pretrained(EN_PT_MODEL_NAME)
+    en_pt_model = MarianMTModel.from_pretrained(EN_PT_MODEL_NAME)
     en_pt_model.eval()
 
     return (
+        torch,
         fr_en_tokenizer,
         fr_en_model,
         en_pt_tokenizer,
@@ -29,61 +40,65 @@ def load_translation_models():
     )
 
 
-def translate_text(
+def _translate(
     text: str,
-    tokenizer,
-    model,
-    prefix: str = "",
+    tokenizer: Any,
+    model: Any,
+    torch_module: Any,
+    language_prefix: str = "",
 ) -> str:
-    source_text = f"{prefix}{text}" if prefix else text
+    prepared_text = f"{language_prefix}{text}"
 
-    inputs = tokenizer(
-        [source_text],
+    encoded = tokenizer(
+        prepared_text,
         return_tensors="pt",
-        padding=True,
         truncation=True,
-        max_length=256,
+        max_length=512,
     )
 
-    with torch.inference_mode():
+    with torch_module.inference_mode():
         generated = model.generate(
-            **inputs,
+            **encoded,
             max_new_tokens=256,
         )
 
-    return tokenizer.batch_decode(
-        generated,
+    return tokenizer.decode(
+        generated[0],
         skip_special_tokens=True,
-    )[0]
+    ).strip()
 
 
 def translate_french_to_portuguese(text: str) -> str:
     """
-    Traduit un commentaire français vers le portugais brésilien.
+    Traduit un commentaire :
+    français -> anglais -> portugais brésilien.
     """
-    text = (text or "").strip()
+    cleaned_text = text.strip()
 
-    if not text:
+    if not cleaned_text:
         return ""
 
     (
+        torch_module,
         fr_en_tokenizer,
         fr_en_model,
         en_pt_tokenizer,
         en_pt_model,
-    ) = load_translation_models()
+    ) = _load_translation_models()
 
-    english_text = translate_text(
-        text,
+    english_text = _translate(
+        cleaned_text,
         fr_en_tokenizer,
         fr_en_model,
+        torch_module,
     )
 
-    portuguese_text = translate_text(
+    portuguese_text = _translate(
         english_text,
         en_pt_tokenizer,
         en_pt_model,
-        prefix=">>pt_BR<< ",
+        torch_module,
+        language_prefix=">>pt_BR<< ",
     )
 
-    return portuguese_text.strip()
+    return portuguese_text
