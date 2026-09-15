@@ -20,7 +20,7 @@
 
 # Configure le fuseau horaire demande pour garder des logs lisibles au Maroc.
 - name: Configure timezone
-  ansible.builtin.command: timedatectl set-timezone Europe/Casablanca
+  ansible.builtin.command: timedatectl set-timezone Africa/Casablanca
   changed_when: false
 
 # Cree le dossier parent qui contiendra le repo applicatif.
