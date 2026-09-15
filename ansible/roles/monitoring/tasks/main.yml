@@ -59,6 +59,16 @@
     - monitoring/grafana/dashboards/mlops-overview.json
   register: monitoring_configuration
 
+# Require the Grafana production password passed by GitHub Actions.
+# no_log prevents the secret from being printed in Ansible output.
+- name: Require Grafana admin password
+  ansible.builtin.assert:
+    that:
+      - grafana_admin_password is defined
+      - grafana_admin_password | string | length > 0
+    fail_msg: "GRAFANA_ADMIN_PASSWORD is required for production monitoring"
+  no_log: true
+
 # No down, volume removal or orphan removal. Recreate only when copied
 # configuration changes, so Prometheus also picks up its new scrape config.
 - name: Reconcile monitoring containers and wait for health checks
@@ -70,7 +80,11 @@
          + (['--force-recreate'] if monitoring_configuration.changed else [])
          + ['prometheus', 'grafana', 'node-exporter'] }}
     chdir: "{{ monitoring_project_dir }}"
-  environment: "{{ monitoring_environment }}"
+  environment: >-
+    {{
+      (monitoring_environment | default({}))
+      | combine({'GRAFANA_ADMIN_PASSWORD': grafana_admin_password})
+    }}
   register: monitoring_compose
   changed_when: >-
     monitoring_configuration.changed or
