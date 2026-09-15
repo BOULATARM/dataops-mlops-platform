@@ -10,7 +10,7 @@ import math
 import os
 import time
 
-from prometheus_client import Counter, REGISTRY
+from prometheus_client import REGISTRY, Counter
 from prometheus_client.core import GaugeMetricFamily
 
 logger = logging.getLogger(__name__)
