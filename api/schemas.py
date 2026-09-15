@@ -50,6 +50,7 @@ class PredictRequest(BaseModel):
 
 
 class PredictResponse(BaseModel):
+    run_id: str | None = None
     satisfied:     bool  = Field(description="True si le client est prédit satisfait (score >= 4)")
     probability:   float = Field(description="Probabilité d'être satisfait (classe 1), entre 0 et 1")
     model_name:    str
@@ -57,6 +58,7 @@ class PredictResponse(BaseModel):
 
 
 class HealthResponse(BaseModel):
+    run_id: str | None = None
     status:        str
     model_loaded:  bool
     model_name:    str | None

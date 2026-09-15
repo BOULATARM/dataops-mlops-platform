@@ -28,6 +28,7 @@ class ModelLoader:
         self.is_loaded: bool = False
         self.model_name: str | None = None
         self.model_version: str | None = None
+        self.run_id: str | None = None
         self.load_error: str | None = None
 
     def reload(self) -> None:
@@ -39,18 +40,34 @@ class ModelLoader:
         try:
             import mlflow
             import mlflow.sklearn
+            from mlflow.tracking import MlflowClient
+
             mlflow.set_tracking_uri(tracking_uri)
 
-            model_uri = f"models:/{model_name}/{model_stage}"
+            client = MlflowClient(tracking_uri=tracking_uri)
+            alias = os.getenv("MLFLOW_MODEL_ALIAS")
+            if alias:
+                version = client.get_model_version_by_alias(model_name, alias)
+            else:
+                versions = client.get_latest_versions(model_name, stages=[model_stage])
+                if not versions:
+                    raise RuntimeError(f"Aucune version {model_stage} pour {model_name}")
+                version = max(versions, key=lambda item: int(item.version))
+            model_uri = f"models:/{model_name}/{version.version}"
             logger.info("Chargement modele depuis %s", model_uri)
             self.model         = mlflow.sklearn.load_model(model_uri)
             self.is_loaded     = True
             self.model_name    = model_name
-            self.model_version = model_stage
+            self.model_version = str(version.version)
+            self.run_id = version.run_id
             self.load_error    = None
             logger.info("Modele '%s/%s' charge. FEATURE_ORDER=%s", model_name, model_stage, FEATURE_ORDER)
 
         except Exception as exc:
+            self.model = None
+            self.model_name = None
+            self.model_version = None
+            self.run_id = None
             self.is_loaded  = False
             self.load_error = str(exc)
             logger.warning("Modele non disponible : %s", exc)

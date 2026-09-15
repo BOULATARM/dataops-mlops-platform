@@ -59,13 +59,15 @@ def mock_loader():
     _loader.model         = MockModel()
     _loader.is_loaded     = True
     _loader.model_name    = "SatisfactionClassifier"
-    _loader.model_version = "Production"
+    _loader.model_version = "19"
+    _loader.run_id        = "source-run-19"
     _loader.load_error    = None
     yield
     _loader.model         = None
     _loader.is_loaded     = False
     _loader.model_name    = None
     _loader.model_version = None
+    _loader.run_id        = "source-run-19"
     _loader.load_error    = None
 
 
@@ -83,3 +85,4 @@ def client_no_model():
     _loader.model_version = None
     _loader.load_error    = "Test: modele absent"
     return TestClient(app)
+

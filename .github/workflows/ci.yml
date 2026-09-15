@@ -191,7 +191,7 @@ jobs:
       - name: Run API tests
         env:
           MLFLOW_TRACKING_URI: "http://localhost:5100"
-        run: python -m pytest tests/test_api.py -v --tb=short
+        run: python -m pytest tests/test_api.py tests/test_registry.py -v --tb=short
 
   # ── 4. build-docker ──────────────────────────────────────────────────────────
   build-docker:

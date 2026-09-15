@@ -55,6 +55,7 @@ def health() -> HealthResponse:
         model_loaded=_loader.is_loaded,
         model_name=_loader.model_name,
         model_version=_loader.model_version,
+        run_id=_loader.run_id,
         load_error=_loader.load_error,
     )
 
@@ -118,4 +119,5 @@ def predict(request: PredictRequest) -> PredictResponse:
         probability=probability,
         model_name=_loader.model_name or "",
         model_version=_loader.model_version or "",
+        run_id=_loader.run_id,
     )

@@ -26,7 +26,8 @@ class TestHealth:
         assert data["status"] == "ok"
         assert data["model_loaded"] is True
         assert data["model_name"] == "SatisfactionClassifier"
-        assert data["model_version"] == "Production"
+        assert data["model_version"] == "19"
+        assert data["run_id"] == "source-run-19"
         assert data["load_error"] is None
 
     def test_health_model_absent(self, client_no_model):
@@ -77,7 +78,8 @@ class TestPredictCasReference:
             f"P(satisfait) attendu ≈0.748, obtenu {data['probability']}"
         )
         assert data["model_name"] == "SatisfactionClassifier"
-        assert data["model_version"] == "Production"
+        assert data["model_version"] == "19"
+        assert data["run_id"] == "source-run-19"
 
     def test_cas_insatisfait(self, client):
         r = client.post("/predict", json=CAS_INSATISFAIT)
@@ -201,3 +203,4 @@ class TestReload:
         data = r.json()
         assert "reloaded" in data
         assert "model_name" in data
+
