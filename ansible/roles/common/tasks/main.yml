@@ -1,4 +1,4 @@
----
+﻿---
 # Met a jour le cache apt pour connaitre les derniers paquets disponibles.
 - name: Update apt cache
   ansible.builtin.apt:
@@ -28,6 +28,7 @@
   ansible.builtin.file:
     path: /app
     state: directory
-    owner: ubuntu
-    group: ubuntu
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
     mode: "0755"
+

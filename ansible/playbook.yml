@@ -1,7 +1,7 @@
 ---
 # Playbook principal pour configurer l'EC2 et deployer uniquement FastAPI.
 # Ordre volontaire: base systeme -> Docker -> application -> monitoring simple.
-- name: Deploy FastAPI on AWS EC2 Free Tier
+- name: Deploy DataOps/MLOps platform on production server
   hosts: fastapi_server
   become: true
 
