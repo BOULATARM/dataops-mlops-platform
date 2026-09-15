@@ -1,15 +1,18 @@
-﻿---
-# Clone le depot applicatif dans /app. force=false evite d'ecraser un travail local.
-- name: Clone application repository
+---
+# ---------------------------------------------------------------------------
+# Déploiement applicatif FastAPI
+# ---------------------------------------------------------------------------
+
+- name: Clone or update application repository
   ansible.builtin.git:
     repo: https://github.com/BOULATARM/dataops-mlops-platform.git
     dest: /app/dataops-mlops-platform
     version: "{{ deploy_revision | default('main') }}"
-    force: false
+    update: true
+    force: true
   become_user: "{{ ansible_user }}"
 
-# Copie le fichier d'exemple vers .env si .env n'existe pas encore.
-- name: Create .env from .env.example
+- name: Create .env from .env.example when absent
   ansible.builtin.copy:
     src: /app/dataops-mlops-platform/.env.example
     dest: /app/dataops-mlops-platform/.env
@@ -19,7 +22,6 @@
     mode: "0644"
     force: false
 
-# Cree le dossier qui recevra les fichiers CSV Olist uploades par scp.
 - name: Create Olist data directory
   ansible.builtin.file:
     path: /data/olist
@@ -28,52 +30,184 @@
     group: "{{ ansible_user }}"
     mode: "0755"
 
-# Cree un Compose de production leger: FastAPI seulement.
-# Le docker-compose complet du repo demarre aussi MLflow et Dagster, trop lourd pour t2.micro.
-- name: Create lightweight production Docker Compose file
+# ---------------------------------------------------------------------------
+# Compose production
+#
+# MLflow tourne déjà sur l'hôte sur le port 5100.
+# host.docker.internal est rendu disponible sous Linux avec host-gateway.
+# ---------------------------------------------------------------------------
+
+- name: Create production Docker Compose file
   ansible.builtin.copy:
-    dest: /app/dataops-mlops-platform/docker-compose.ec2.yml
+    dest: /app/dataops-mlops-platform/docker-compose.prod.yml
     owner: "{{ ansible_user }}"
     group: "{{ ansible_user }}"
     mode: "0644"
     content: |
       services:
         fastapi:
-          build:
-            context: .
-            dockerfile: docker/Dockerfile.fastapi
+          image: "mlops/fastapi:{{ deploy_revision }}"
           container_name: mlops_fastapi
           restart: unless-stopped
+
           ports:
             - "8100:8000"
+
+          extra_hosts:
+            - "host.docker.internal:host-gateway"
+
           environment:
             MLFLOW_TRACKING_URI: "{{ mlflow_tracking_uri }}"
             MLFLOW_MODEL_NAME: "SatisfactionClassifier"
             MLFLOW_MODEL_STAGE: "Production"
             PYTHONIOENCODING: "utf-8"
 
-# Build et lance uniquement le service FastAPI.
-- name: Start FastAPI service only
+# ---------------------------------------------------------------------------
+# Build
+#
+# Le build est lancé en tâche asynchrone afin qu'une longue compilation
+# Docker ne dépende pas d'une unique session SSH GitHub Actions.
+# ---------------------------------------------------------------------------
+
+- name: Start FastAPI Docker image build asynchronously
   ansible.builtin.command:
-    cmd: docker compose -f docker-compose.ec2.yml up -d --build fastapi
+    cmd: >
+      docker build
+      --pull
+      -f docker/Dockerfile.fastapi
+      -t mlops/fastapi:{{ deploy_revision }}
+      .
     chdir: /app/dataops-mlops-platform
-  register: compose_result
-  changed_when: "'Started' in compose_result.stdout or 'Built' in compose_result.stdout or 'Recreated' in compose_result.stdout or 'Created' in compose_result.stdout"
+  async: 1800
+  poll: 0
+  register: fastapi_build_job
+  changed_when: true
 
-# Attend que l'API reponde. /health renvoie 200 meme si le modele MLflow n'est pas charge.
-- name: Wait for FastAPI health endpoint
+- name: Wait for FastAPI Docker image build
+  ansible.builtin.async_status:
+    jid: "{{ fastapi_build_job.ansible_job_id }}"
+  register: fastapi_build_result
+  until: fastapi_build_result.finished
+  retries: 180
+  delay: 10
+
+- name: Show Docker build result
+  ansible.builtin.debug:
+    msg:
+      - "Docker image built: mlops/fastapi:{{ deploy_revision }}"
+      - "{{ fastapi_build_result.stdout | default('') }}"
+
+# ---------------------------------------------------------------------------
+# Vérification du conteneur existant
+# ---------------------------------------------------------------------------
+
+- name: Check whether FastAPI container already exists
+  ansible.builtin.command:
+    cmd: docker inspect mlops_fastapi
+  register: existing_fastapi
+  failed_when: false
+  changed_when: false
+
+# ---------------------------------------------------------------------------
+# Déploiement
+#
+# L'ancien conteneur n'est supprimé qu'après réussite complète du build.
+# ---------------------------------------------------------------------------
+
+- name: Deploy FastAPI container
+  block:
+
+    - name: Remove previous FastAPI container
+      ansible.builtin.command:
+        cmd: docker rm -f mlops_fastapi
+      when: existing_fastapi.rc == 0
+      changed_when: true
+
+    - name: Start new FastAPI container
+      ansible.builtin.command:
+        cmd: docker compose -f docker-compose.prod.yml up -d --no-build fastapi
+        chdir: /app/dataops-mlops-platform
+      register: compose_result
+      changed_when: true
+
+    - name: Wait for FastAPI health endpoint
+      ansible.builtin.uri:
+        url: http://127.0.0.1:8100/health
+        method: GET
+        status_code: 200
+        return_content: true
+      register: health_check
+      retries: 24
+      delay: 5
+      until:
+        - health_check.status == 200
+
+    - name: Show FastAPI health response
+      ansible.builtin.debug:
+        var: health_check.json
+
+    - name: Require production MLflow model to be loaded
+      ansible.builtin.assert:
+        that:
+          - health_check.json.status == "ok"
+          - health_check.json.model_loaded | bool
+        fail_msg: >-
+          FastAPI is responding but the production MLflow model
+          is not loaded.
+        success_msg: >-
+          FastAPI is healthy and the production MLflow model
+          is loaded.
+
+  rescue:
+
+    - name: Collect FastAPI container state after deployment failure
+      ansible.builtin.command:
+        cmd: docker ps -a --filter name=mlops_fastapi
+      register: failed_container_state
+      failed_when: false
+      changed_when: false
+
+    - name: Collect FastAPI logs after deployment failure
+      ansible.builtin.command:
+        cmd: docker logs --tail 200 mlops_fastapi
+      register: failed_fastapi_logs
+      failed_when: false
+      changed_when: false
+
+    - name: Show failed FastAPI container state
+      ansible.builtin.debug:
+        var: failed_container_state.stdout_lines
+
+    - name: Show failed FastAPI logs
+      ansible.builtin.debug:
+        var: failed_fastapi_logs.stdout_lines
+
+    - name: Fail deployment after diagnostics
+      ansible.builtin.fail:
+        msg: "FastAPI production deployment failed. Diagnostics were collected above."
+
+# ---------------------------------------------------------------------------
+# Preuves finales
+# ---------------------------------------------------------------------------
+
+- name: Verify deployed FastAPI container
+  ansible.builtin.command:
+    cmd: docker ps --filter name=mlops_fastapi
+  register: deployed_fastapi
+  changed_when: false
+
+- name: Show deployed FastAPI container
+  ansible.builtin.debug:
+    var: deployed_fastapi.stdout_lines
+
+- name: Verify final health endpoint
   ansible.builtin.uri:
-    url: http://localhost:8100/health
+    url: http://127.0.0.1:8100/health
     method: GET
+    return_content: true
     status_code: 200
-  register: health_check
-  retries: 12
-  delay: 5
-  until: health_check.status == 200
+  register: final_health
 
-- name: Require the production model to be loaded
-  ansible.builtin.assert:
-    that:
-      - health_check.json.model_loaded | bool
-    fail_msg: "FastAPI responds but its production model is unavailable"
-
+- name: Show final production health
+  ansible.builtin.debug:
+    var: final_health.json
