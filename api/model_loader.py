@@ -80,7 +80,10 @@ class ModelLoader:
         Construit un DataFrame 1-ligne dans l'ordre exact de FEATURE_ORDER.
         C'est le seul endroit où les valeurs sont mises en position — pas dans /predict.
         """
-        return pd.DataFrame([{col: row[col] for col in FEATURE_ORDER}])
+        values = {col: row[col] for col in FEATURE_ORDER}
+        if "review_comment_message" in getattr(self.model, "feature_names_in_", []):
+            values["review_comment_message"] = row.get("review_comment_message") or ""
+        return pd.DataFrame([values])
 
     def predict_one(self, row: dict) -> tuple[bool, float]:
         """

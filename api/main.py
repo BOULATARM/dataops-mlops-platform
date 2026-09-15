@@ -90,6 +90,7 @@ def predict(request: PredictRequest) -> PredictResponse:
         )
 
     row = {
+        "review_comment_message": request.review_comment_message or "",
         "delivery_delay_days":   request.delivery_delay_days,
         "review_comment_length": request.review_comment_length,
         "has_comment":           int(request.has_comment),

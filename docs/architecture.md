@@ -41,7 +41,7 @@
 │    reviews_features    — Feature set ML (target + features)             │
 └────────────┬─────────────────────────────────┬──────────────────────────┘
              │                                 │
-             ▼  ml/training/train.py           ▼  BI / reporting
+             ▼  ml/training/train_v2.py           ▼  BI / reporting
     ┌──────────────────┐              ┌─────────────────────┐
     │  Scikit-learn    │              │  Grafana / Power BI │
     │  LogisticReg.    │              │  (données Gold via  │

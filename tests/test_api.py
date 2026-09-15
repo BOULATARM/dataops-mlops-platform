@@ -204,3 +204,13 @@ class TestReload:
         assert "reloaded" in data
         assert "model_name" in data
 
+
+
+def test_text_feature_forwarded_for_text_models():
+    from api.model_loader import ModelLoader
+    from types import SimpleNamespace
+    loader = ModelLoader()
+    loader.model = SimpleNamespace(feature_names_in_=FEATURE_ORDER + ["review_comment_message"])
+    row = {**CAS_SATISFAIT, "review_comment_message": "entrega excelente"}
+    assert loader._to_dataframe(row)["review_comment_message"][0] == "entrega excelente"
+    assert loader._to_dataframe(CAS_SATISFAIT)["review_comment_message"][0] == ""

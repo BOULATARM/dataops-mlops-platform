@@ -168,14 +168,13 @@ dbt deps
 dbt build
 
 # Entraînement ML
-cd ../ml/training
-pip install -r requirements.txt
-python train.py
+cd ..
+pip install -r ml/requirements.txt
+python -m ml.training.train_v2
 
 # API locale
-cd ../../api
-pip install -r requirements.txt
-uvicorn main:app --port 8100
+pip install -r api/requirements.txt
+uvicorn api.main:app --port 8100
 ```
 
 ### 4. Lineage dbt
@@ -213,7 +212,7 @@ mlops-dataops-platform/
 │   ├── jobs/               # Jobs = combinaison d'assets
 │   └── schedules/          # Scheduling quotidien
 ├── ml/
-│   ├── training/           # train.py + features.py + evaluate.py
+│   ├── training/           # train_v2.py + features.py (train_legacy.py déprécié) + evaluate.py
 │   └── mlflow/             # Artefacts MLflow (volume Docker)
 ├── api/                    # FastAPI /predict + /health
 ├── docker/                 # docker-compose.yml + Dockerfiles
@@ -231,12 +230,12 @@ mlops-dataops-platform/
 - `review_comment_length` — longueur du commentaire (chars)
 - `has_comment` — présence ou non d'un commentaire textuel
 - `delivery_delay_days` — délai entre date estimée et date réelle
-- `payment_type_encoded` — one-hot encoding du type de paiement
-- TF-IDF (50 features) sur `review_comment_message`
+- `payment_type_encoded` — encodage catégoriel entier du type de paiement
+- TF-IDF (500 termes maximum, n-grammes 1–2, min_df=5) sur `review_comment_message`
 
 **Algorithme** : `LogisticRegression` (sklearn), baseline solide et interprétable  
 **Tracking** : MLflow (params, métriques accuracy/F1/AUC, artefact modèle)  
-**Registry** : modèle enregistré sous `SentimentClassifier` → stage `Production`
+**Registry** : modèle enregistré sous `SatisfactionClassifier` → stage `Production`
 
 ---
 
@@ -250,3 +249,16 @@ mlops-dataops-platform/
 | Ports | 8080/3306/27017/3000 | 3100/5100/8100 |
 | Réseau Docker | `dep-network` | `mlops-network` |
 | Données sources | Lues depuis `data/raw/` | Même fichiers, montés en lecture seule |
+
+
+### Source de vérité de l'entraînement
+
+Depuis la racine : `python -m ml.training.train_v2` (après `dbt build`).
+Ce point d'entrée utilise le texte + les quatre numériques, TF-IDF et
+`LogisticRegression(solver="liblinear", class_weight="balanced")`.
+`train_legacy.py` conserve la baseline numérique historique et refuse une exécution directe.
+Le code v2 a été reconstruit à partir des paramètres de l'audit : son identité exacte
+avec le script serveur ayant produit v19 reste à vérifier. Aucun candidat n'est promu
+automatiquement ni écrit par-dessus v19. L'API accepte le champ optionnel
+`review_comment_message` ; les anciens clients restent acceptés avec un texte vide,
+mais n'apportent pas le signal textuel utile au modèle v2.

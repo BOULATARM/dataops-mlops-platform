@@ -8,6 +8,7 @@ class PredictRequest(BaseModel):
     Champs NOMMÉS — ordre indépendant, aucun risque de permutation positionnelle.
     Correspondent exactement à api/constants.FEATURE_ORDER.
     """
+    review_comment_message: str | None = Field(default=None, description="Texte facultatif ; absent traité comme vide")
     delivery_delay_days:   float = Field(
         description="Délai livraison réelle vs estimée en jours (négatif = en avance, positif = en retard)"
     )

@@ -50,6 +50,7 @@ SELECT
 
     -- ── Target ──────────────────────────────────────────────────────────────
     r.review_score,
+    COALESCE(r.review_comment_message, '') AS review_comment_message,
     CASE WHEN r.review_score >= 4 THEN 1 ELSE 0 END                AS satisfied,
 
     -- ── Features texte ──────────────────────────────────────────────────────

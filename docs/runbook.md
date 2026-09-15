@@ -43,8 +43,8 @@ dbt build         # run + test toutes les couches
 dbt docs generate && dbt docs serve --port 8080
 
 # Étape 3 : entraînement ML
-cd ../ml/training
-python train.py   # log dans MLflow local (./mlruns)
+cd ..  # racine du dépôt
+python -m ml.training.train_v2  # candidat MLflow, sans promotion
 
 # Étape 4 : API
 cd ../../api

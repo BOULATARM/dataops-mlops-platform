@@ -30,7 +30,7 @@ bronze_* → silver_* → gold_orders_summary
                      → gold_customer_rfm
                      → gold_product_performance
                      → gold_seller_ranking
-                     → gold_reviews_features  →  ML (SentimentClassifier)
+                     → gold_reviews_features  →  ML (SatisfactionClassifier)
 ```
 
 {% enddocs %}
