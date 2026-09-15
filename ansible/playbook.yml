@@ -5,8 +5,43 @@
   hosts: fastapi_server
   become: true
 
+  pre_tasks:
+    - name: Require a reachable MLflow URL for the API container
+      ansible.builtin.assert:
+        that:
+          - mlflow_tracking_uri is defined
+          - mlflow_tracking_uri is match('^https?://[A-Za-z0-9.-]+(:[0-9]+)?/?$')
+          - "'127.0.0.1' not in mlflow_tracking_uri"
+          - "'localhost' not in mlflow_tracking_uri"
+
+
   roles:
     - common
     - docker
     - app
     - monitoring
+
+  post_tasks:
+    - name: Capture production Compose state
+      ansible.builtin.command:
+        argv:
+          - python3
+          - docker/capture_compose_state.py
+          - --compose-file
+          - docker-compose.ec2.yml
+          - --output
+          - /tmp/compose-state.json
+        chdir: /app/dataops-mlops-platform
+      changed_when: false
+      register: capture_result
+      failed_when: false
+
+    - name: Fetch deployment evidence
+      ansible.builtin.fetch:
+        src: /tmp/compose-state.json
+        dest: "{{ evidence_dir | default('./evidence') }}/compose-state.json"
+        flat: true
+
+    - name: Verify state capture succeeded
+      ansible.builtin.assert:
+        that: capture_result.rc == 0

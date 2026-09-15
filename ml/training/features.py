@@ -12,7 +12,7 @@ from ml.training.config import (
 )
 
 
-def load_features() -> pd.DataFrame:
+def load_features(include_text: bool = False) -> pd.DataFrame:
     """
     Charge les features depuis main_gold.gold_reviews_features (lecture seule).
 
@@ -21,11 +21,16 @@ def load_features() -> pd.DataFrame:
     garantit la cohérence entraînement ↔ inférence.
     """
     cols = NUMERIC_FEATURES + [TARGET_COLUMN]
+    if include_text:
+        cols += ["review_comment_message"]
     con = duckdb.connect(DUCKDB_PATH, read_only=True)
     try:
         df = con.execute(f"SELECT {', '.join(cols)} FROM {GOLD_TABLE}").df()
     finally:
         con.close()
+
+    if include_text:
+        df["review_comment_message"] = df["review_comment_message"].fillna("")
 
     # Booléen DuckDB → int pour SimpleImputer/StandardScaler
     df["has_comment"] = df["has_comment"].astype(int)

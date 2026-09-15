@@ -13,6 +13,69 @@ env:
   PYTHON_VERSION: "3.11"
 
 jobs:
+  deploy:
+    name: Deploy verified revision with Ansible
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [build-docker, smoke-test-api]
+    runs-on: ubuntu-latest
+    environment: production
+    concurrency:
+      group: production-deploy
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install ansible-core==2.17.14
+      - name: Configure deployment credentials
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+          MLFLOW_URI: ${{ vars.MLFLOW_TRACKING_URI }}
+        run: |
+          mkdir -p ~/.ssh evidence
+          chmod 700 ~/.ssh
+          test -n "$SSH_KEY" && test -n "$KNOWN_HOSTS"
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/deploy_key ~/.ssh/known_hosts
+          python - <<'PY'
+          import json, os
+          for name in ('DEPLOY_HOST', 'DEPLOY_USER', 'MLFLOW_URI'):
+              assert os.environ[name], f'Missing configuration: {name}'
+          with open('inventory.json', 'w') as f:
+              json.dump({'all': {'children': {'fastapi_server': {'hosts': {
+                  os.environ['DEPLOY_HOST']: {'ansible_user': os.environ['DEPLOY_USER'],
+                  'ansible_ssh_private_key_file': os.path.expanduser('~/.ssh/deploy_key')}
+              }}}}}, f)
+          with open('deploy-vars.json', 'w') as f:
+              json.dump({'deploy_revision': os.environ['GITHUB_SHA'],
+                         'mlflow_tracking_uri': os.environ['MLFLOW_URI'],
+                         'evidence_dir': os.path.abspath('evidence')}, f)
+          PY
+      - name: Deploy and record Ansible result
+        shell: bash
+        run: |
+          set -o pipefail
+          date -u +%FT%TZ > evidence/started-at.txt
+          printf '%s\n' "$GITHUB_SHA" > evidence/revision.txt
+          ansible-playbook -i inventory.json ansible/playbook.yml --extra-vars @deploy-vars.json 2>&1 | tee evidence/ansible.log
+      - name: Publish deployment evidence (including failures)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-${{ github.sha }}-${{ github.run_attempt }}
+          path: evidence/
+          retention-days: 30
+      - name: Remove SSH key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key
+
   # ── 1. Lint ──────────────────────────────────────────────────────────────────
   lint:
     name: Lint (ruff)
@@ -83,6 +146,23 @@ jobs:
         working-directory: dbt_project
         run: dbt build --profiles-dir . --target dev
 
+      - name: Verify volume stability against previous build
+        run: dbt build --project-dir dbt_project --profiles-dir dbt_project --target dev
+
+      - name: Generate dbt lineage documentation
+        run: dbt docs generate --project-dir dbt_project --profiles-dir dbt_project --target dev
+
+      - name: Publish downloadable dbt documentation
+        uses: actions/upload-artifact@v4
+        with:
+          name: dbt-docs-${{ github.sha }}
+          path: |
+            dbt_project/target/index.html
+            dbt_project/target/manifest.json
+            dbt_project/target/catalog.json
+          if-no-files-found: error
+          retention-days: 30
+
   # ── 3. test-api ──────────────────────────────────────────────────────────────
   test-api:
     name: API tests (pytest + MockModel)
@@ -108,13 +188,14 @@ jobs:
             "pydantic==2.7.1" \
             "python-dotenv==1.0.1" \
             "numpy" \
+            "duckdb==1.1.3" \
             "pytest==8.2.0" \
             "httpx==0.27.0"
 
       - name: Run API tests
         env:
           MLFLOW_TRACKING_URI: "http://localhost:5100"
-        run: python -m pytest tests/test_api.py -v --tb=short
+        run: python -m pytest tests/test_api.py tests/test_registry.py tests/test_monitoring.py -v --tb=short
 
   # ── 4. build-docker ──────────────────────────────────────────────────────────
   build-docker:

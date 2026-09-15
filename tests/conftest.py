@@ -6,6 +6,8 @@ observées lors des tests manuels sur SatisfactionClassifier v4 → Production.
 Il permet de tester la logique de l'API sans connexion MLflow.
 """
 
+from typing import ClassVar
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -24,7 +26,7 @@ class MockModel:
       ambigu      : delay=+3,  len=85,  has_comment=1, payment=0 → P≈0.175
     """
 
-    _CASES: dict[tuple, float] = {
+    _CASES: ClassVar[dict[tuple[float, int, int, int], float]] = {
         (-20.0, 0,   0, 0): 0.748,
         ( 20.0, 280, 1, 1): 0.004,
         (  3.0, 85,  1, 0): 0.1754,
@@ -58,13 +60,15 @@ def mock_loader():
     _loader.model         = MockModel()
     _loader.is_loaded     = True
     _loader.model_name    = "SatisfactionClassifier"
-    _loader.model_version = "Production"
+    _loader.model_version = "19"
+    _loader.run_id        = "source-run-19"
     _loader.load_error    = None
     yield
     _loader.model         = None
     _loader.is_loaded     = False
     _loader.model_name    = None
     _loader.model_version = None
+    _loader.run_id        = None
     _loader.load_error    = None
 
 
@@ -80,16 +84,15 @@ def client_no_model():
     _loader.is_loaded     = False
     _loader.model_name    = None
     _loader.model_version = None
+    _loader.run_id        = None
     _loader.load_error    = "Test: modele absent"
     return TestClient(app)
 
 
+
 @pytest.fixture(autouse=True)
 def mock_french_translation(monkeypatch):
-    """
-    Les tests API ne téléchargent pas les modèles Hugging Face.
-    La traduction réelle est testée séparément en intégration.
-    """
+    """Evite le telechargement Hugging Face pendant les tests API."""
     monkeypatch.setattr(
         "api.main.translate_french_to_portuguese",
         lambda text: text,

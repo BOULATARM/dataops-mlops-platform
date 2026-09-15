@@ -4,7 +4,6 @@ import pandas as pd
 import requests
 import streamlit as st
 
-
 # Adresse de l'API FastAPI
 FASTAPI_URL = os.environ.get("FASTAPI_URL", "http://localhost:8100")
 
@@ -249,7 +248,7 @@ if st.button(
             "FastAPI n'a pas renvoyé une réponse JSON valide."
         )
 
-    except Exception as error:
+    except Exception as error:  # noqa: BLE001
         st.error(f"Erreur inattendue : {error}")
 
 

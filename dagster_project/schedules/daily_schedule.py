@@ -1,6 +1,9 @@
 """
 Schedule quotidien 02:00 UTC pour le full_pipeline_job.
-Défini mais non activé en production — activation via l'UI Dagster.
+STOPPED volontaire : corpus Olist historique, exécution à la demande.
+Pas d'ingestion continue sans nouvelles sources et budget serveur validés.
+Une activation persistée dans Dagster prime sur ce défaut : contrôler l'UI
+sur une instance existante avant d'affirmer son état effectif.
 """
 
 from dagster import DefaultScheduleStatus, ScheduleDefinition

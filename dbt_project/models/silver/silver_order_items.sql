@@ -1,4 +1,4 @@
-{{ config(materialized='table', schema='silver', tags=['silver']) }}
+{{ config(materialized='table', schema='silver', tags=['silver'], pre_hook='{{ capture_previous_volume() }}') }}
 
 WITH source AS (
     SELECT * FROM {{ ref('bronze_order_items') }}
@@ -36,3 +36,5 @@ SELECT
     _source_file,
     _batch_id
 FROM casted
+
+QUALIFY ROW_NUMBER() OVER (PARTITION BY order_id, order_item_id ORDER BY _loaded_at DESC, _batch_id DESC) = 1

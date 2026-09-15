@@ -4,7 +4,7 @@
   ansible.builtin.git:
     repo: https://github.com/BOULATARM/dataops-mlops-platform.git
     dest: /app/dataops-mlops-platform
-    version: main
+    version: "{{ deploy_revision | default('main') }}"
     force: false
   become_user: ubuntu
 
@@ -47,7 +47,7 @@
           ports:
             - "8100:8000"
           environment:
-            MLFLOW_TRACKING_URI: "http://127.0.0.1:5100"
+            MLFLOW_TRACKING_URI: "{{ mlflow_tracking_uri }}"
             MLFLOW_MODEL_NAME: "SatisfactionClassifier"
             MLFLOW_MODEL_STAGE: "Production"
             PYTHONIOENCODING: "utf-8"
@@ -70,3 +70,9 @@
   retries: 12
   delay: 5
   until: health_check.status == 200
+
+- name: Require the production model to be loaded
+  ansible.builtin.assert:
+    that:
+      - health_check.json.model_loaded | bool
+    fail_msg: "FastAPI responds but its production model is unavailable"
