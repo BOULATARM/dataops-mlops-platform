@@ -1,6 +1,7 @@
 scikit-learn==1.9.0
-mlflow==2.13.0
+mlflow==2.16.0
 pandas==2.2.2
 duckdb==1.1.0
 python-dotenv==1.0.1
 numpy==1.26.4
+protobuf==5.29.5

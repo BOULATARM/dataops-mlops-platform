@@ -54,3 +54,11 @@ terraform/*.tfstate.backup
 *.log
 *.out
 *.toc
+
+# Sauvegardes locales
+*.backup
+*.backup-*
+api-before-v2-fr-*/
+
+# Donnees locales
+data/

@@ -6,7 +6,7 @@ Une activation persistée dans Dagster prime sur ce défaut : contrôler l'UI
 sur une instance existante avant d'affirmer son état effectif.
 """
 
-from dagster import ScheduleDefinition, DefaultScheduleStatus
+from dagster import DefaultScheduleStatus, ScheduleDefinition
 
 from dagster_project.jobs.full_pipeline_job import full_pipeline_job
 

@@ -9,7 +9,7 @@ DUCKDB_PATH env var prioritaire sur le chemin local calcule depuis __file__.
 import os
 from pathlib import Path
 
-from dagster import asset, AssetExecutionContext, Output, MetadataValue
+from dagster import AssetExecutionContext, MetadataValue, Output, asset
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 

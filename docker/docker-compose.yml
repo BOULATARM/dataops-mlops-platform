@@ -49,7 +49,7 @@ services:
       # DuckDB : bind mount sur le fichier warehouse local (lecture-ecriture)
       - ../warehouse/duckdb:/data/duckdb
       # Donnees brutes Olist depuis data-engineering-platform (lecture seule)
-      - ../../data-engineering-platform/data/raw:/data/raw:ro
+      - /root/dataops-mlops-platform/data/raw:/data/raw:ro
     networks:
       mlops_net:
         ipv4_address: 172.29.1.10
@@ -75,7 +75,7 @@ services:
     volumes:
       - dagster_home:/dagster_home
       - ../warehouse/duckdb:/data/duckdb
-      - ../../data-engineering-platform/data/raw:/data/raw:ro
+      - /root/dataops-mlops-platform/data/raw:/data/raw:ro
     networks:
       mlops_net:
         ipv4_address: 172.29.1.11

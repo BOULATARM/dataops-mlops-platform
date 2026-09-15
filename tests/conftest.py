@@ -67,7 +67,7 @@ def mock_loader():
     _loader.is_loaded     = False
     _loader.model_name    = None
     _loader.model_version = None
-    _loader.run_id        = "source-run-19"
+    _loader.run_id        = None
     _loader.load_error    = None
 
 
@@ -83,6 +83,16 @@ def client_no_model():
     _loader.is_loaded     = False
     _loader.model_name    = None
     _loader.model_version = None
+    _loader.run_id        = None
     _loader.load_error    = "Test: modele absent"
     return TestClient(app)
 
+
+
+@pytest.fixture(autouse=True)
+def mock_french_translation(monkeypatch):
+    """Evite le telechargement Hugging Face pendant les tests API."""
+    monkeypatch.setattr(
+        "api.main.translate_french_to_portuguese",
+        lambda text: text,
+    )
