@@ -22,6 +22,7 @@ import mlflow
 import mlflow.sklearn
 import numpy as np
 import pandas as pd
+from mlflow.exceptions import MlflowException
 from mlflow.models import infer_signature
 from mlflow.tracking import MlflowClient
 from sklearn.calibration import CalibratedClassifierCV
@@ -286,22 +287,35 @@ def compute_metrics(
 def _find_current_model(client: MlflowClient) -> Any | None:
     """Find champion alias, otherwise latest Production version."""
     try:
-        return client.get_model_version_by_alias(MLFLOW_MODEL_NAME, "champion")
-    except Exception:
-        pass
+        champion = client.get_model_version_by_alias(
+            MLFLOW_MODEL_NAME,
+            "champion",
+        )
+    except MlflowException:
+        champion = None
+
+    if champion is not None:
+        return champion
 
     try:
-        versions = client.search_model_versions(f"name='{MLFLOW_MODEL_NAME}'")
-    except Exception:
+        versions = client.search_model_versions(
+            f"name='{MLFLOW_MODEL_NAME}'"
+        )
+    except MlflowException:
         return None
 
     production_versions = [
-        version for version in versions if version.current_stage == "Production"
+        version
+        for version in versions
+        if version.current_stage == "Production"
     ]
     if not production_versions:
         return None
 
-    return max(production_versions, key=lambda item: int(item.version))
+    return max(
+        production_versions,
+        key=lambda item: int(item.version),
+    )
 
 
 def _current_run_information(

@@ -13,9 +13,9 @@ trois colonnes de métadonnées d'ingestion :
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from collections.abc import Iterator
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Iterator
 
 import dlt
 import pandas as pd
@@ -31,7 +31,7 @@ def _iter_csv(
     """Lit le CSV associé à *table_key* et yield des dicts enrichis de métadonnées."""
     filename: str = CSV_FILES[table_key]
     filepath: Path = CSV_DIR / filename
-    loaded_at: str = datetime.now(tz=timezone.utc).isoformat()
+    loaded_at: str = datetime.now(tz=UTC).isoformat()
 
     for chunk in pd.read_csv(
         filepath,

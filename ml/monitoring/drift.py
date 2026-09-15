@@ -16,7 +16,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -67,7 +67,7 @@ CATEGORICAL_FEATURES = [
 
 
 def _utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def load_current_data() -> pd.DataFrame:
@@ -105,7 +105,7 @@ def _numeric_distribution(
     proportions = counts / counts.sum()
 
     return {
-        "count": int(len(values)),
+        "count": len(values),
         "cutpoints": [float(value) for value in cutpoints],
         "proportions": [float(value) for value in proportions],
         "mean": float(np.mean(values)),
@@ -131,7 +131,7 @@ def _categorical_distribution(
     }
 
     return {
-        "count": int(len(values)),
+        "count": len(values),
         "categories": categories,
         "proportions": proportions,
     }
@@ -158,7 +158,7 @@ def build_profile(dataframe: pd.DataFrame) -> dict[str, Any]:
 
     return {
         "created_at": _utc_now(),
-        "rows": int(len(dataframe)),
+        "rows": len(dataframe),
         "numeric": numeric,
         "categorical": categorical,
     }
@@ -242,7 +242,7 @@ def compare_profiles(
             "psi": psi_value,
             "severity": _severity(psi_value),
             "reference_count": int(reference.get("count", 0)),
-            "current_count": int(len(current_values)),
+            "current_count": len(current_values),
         }
 
     if not psi_values:
@@ -255,7 +255,7 @@ def compare_profiles(
         "status": "checked",
         "checked_at": _utc_now(),
         "baseline_rows": int(baseline.get("rows", 0)),
-        "current_rows": int(len(current_dataframe)),
+        "current_rows": len(current_dataframe),
         "max_psi": max_psi,
         "warning_threshold": WARNING_THRESHOLD,
         "high_threshold": HIGH_THRESHOLD,
@@ -347,7 +347,7 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
 
 def _save_report(report: dict[str, Any]) -> None:
     _write_json(LATEST_REPORT_PATH, report)
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     history_path = LATEST_REPORT_PATH.parent / f"drift_report_{timestamp}.json"
     _write_json(history_path, report)
 
@@ -397,7 +397,7 @@ def refresh_baseline() -> dict[str, Any]:
     return {
         "status": "baseline_refreshed",
         "baseline_path": str(BASELINE_PATH),
-        "rows": int(len(dataframe)),
+        "rows": len(dataframe),
         "created_at": profile["created_at"],
     }
 

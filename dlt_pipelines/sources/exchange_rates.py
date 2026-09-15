@@ -19,9 +19,9 @@ from __future__ import annotations
 
 import json
 import uuid
-from datetime import datetime, timezone
+from collections.abc import Iterator
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Iterator
 
 import dlt
 
@@ -76,7 +76,7 @@ def exchange_rates_source(batch_id: str = "") -> list:
         write_disposition="append",
     )
     def raw_exchange_rates() -> Iterator[dict]:
-        loaded_at = datetime.now(tz=timezone.utc).isoformat()
+        loaded_at = datetime.now(tz=UTC).isoformat()
 
         json_files = sorted(API_DIR.glob("exchange_rates*.json"))
         if not json_files:

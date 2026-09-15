@@ -80,7 +80,7 @@ class ModelLoader:
             try:
                 self.model = mlflow.sklearn.load_model(model_uri)
                 self.model_flavor = "sklearn"
-            except Exception as sklearn_error:
+            except Exception as sklearn_error:  # noqa: BLE001
                 logger.warning(
                     "Flavor sklearn indisponible : %s. Tentative PyFunc.",
                     sklearn_error,
@@ -102,7 +102,7 @@ class ModelLoader:
                 self.model_flavor,
             )
 
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             self.model = None
             self.is_loaded = False
             self.model_name = None

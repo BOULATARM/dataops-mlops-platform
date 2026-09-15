@@ -54,6 +54,7 @@ def _dbt_build(select: str, context: AssetExecutionContext) -> str:
         # On décode manuellement avec errors='replace'
         env=env,
         cwd=str(_DBT_DIR),
+        check=False,
     )
     stdout = result.stdout.decode("utf-8", errors="replace")
     stderr = result.stderr.decode("utf-8", errors="replace")

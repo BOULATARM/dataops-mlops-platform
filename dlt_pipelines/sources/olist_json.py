@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import json
 import uuid
-from datetime import datetime, timezone
-from typing import Iterator
+from collections.abc import Iterator
+from datetime import UTC, datetime
 
 import dlt
 
@@ -35,7 +35,7 @@ def olist_json_source(batch_id: str = "") -> list:
         primary_key="product_id",
     )
     def raw_products_json() -> Iterator[dict]:
-        loaded_at = datetime.now(tz=timezone.utc).isoformat()
+        loaded_at = datetime.now(tz=UTC).isoformat()
         filename = JSON_PRODUCTS_FILE.name
 
         with open(JSON_PRODUCTS_FILE, encoding="utf-8") as fh:

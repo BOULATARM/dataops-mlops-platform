@@ -6,13 +6,14 @@ observées lors des tests manuels sur SatisfactionClassifier v4 → Production.
 Il permet de tester la logique de l'API sans connexion MLflow.
 """
 
+from typing import ClassVar
+
 import numpy as np
 import pandas as pd
 import pytest
 from fastapi.testclient import TestClient
 
-from api.main import app, _loader
-from api.constants import FEATURE_ORDER
+from api.main import _loader, app
 
 
 class MockModel:
@@ -25,7 +26,7 @@ class MockModel:
       ambigu      : delay=+3,  len=85,  has_comment=1, payment=0 → P≈0.175
     """
 
-    _CASES: dict[tuple, float] = {
+    _CASES: ClassVar[dict[tuple[float, int, int, int], float]] = {
         (-20.0, 0,   0, 0): 0.748,
         ( 20.0, 280, 1, 1): 0.004,
         (  3.0, 85,  1, 0): 0.1754,

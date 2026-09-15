@@ -61,7 +61,7 @@ def _count_rows(table: str) -> int:
         n = con.execute(f'SELECT COUNT(*) FROM bronze."{table}"').fetchone()[0]
         con.close()
         return n
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         log.warning("Count failed for %s: %s", table, exc)
         return -1
 
@@ -127,7 +127,7 @@ def run_all(dry_run: bool = False) -> list[ResourceResult]:
             res.elapsed_s = round(time.perf_counter() - t0, 2)
             res.success = True
             log.info("   [OK] %s -- %.2fs", label, res.elapsed_s)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             res.elapsed_s = round(time.perf_counter() - t0, 2)
             res.error = str(exc)
             log.error("   [FAIL] %s -- %s", label, exc)

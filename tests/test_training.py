@@ -1,11 +1,11 @@
 import numpy as np
 import pytest
+from sklearn.calibration import CalibratedClassifierCV
 from sklearn.datasets import make_classification
 from sklearn.linear_model import LogisticRegression
-from sklearn.calibration import CalibratedClassifierCV
 
-from ml.training.train_v2 import select_threshold
 from ml.training.threshold_model import ThresholdClassifier
+from ml.training.train_v2 import select_threshold
 
 
 def test_threshold_improves_class_zero_recall_with_precision_constraint():

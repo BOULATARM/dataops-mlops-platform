@@ -30,7 +30,13 @@ def _dbt_build(select: str, context: AssetExecutionContext) -> str:
     env = {**os.environ, "DUCKDB_PATH": _DB_PATH, "PYTHONIOENCODING": "utf-8"}
     context.log.info(f"dbt build --select {select}")
 
-    result = subprocess.run(cmd, capture_output=True, env=env, cwd=str(_DBT_DIR))
+    result = subprocess.run(
+        cmd,
+        capture_output=True,
+        env=env,
+        cwd=str(_DBT_DIR),
+        check=False,
+    )
     stdout = result.stdout.decode("utf-8", errors="replace")
     stderr = result.stderr.decode("utf-8", errors="replace")
 

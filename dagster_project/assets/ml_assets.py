@@ -204,7 +204,7 @@ def api_model_reload(
             "Baseline de dérive mise à jour : %s",
             baseline_result,
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         context.log.warning(
             "Le modèle a été rechargé, mais la baseline "
             "de dérive n'a pas été mise à jour : %s",

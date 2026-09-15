@@ -26,7 +26,12 @@ def test_stable_silent_and_shift_alerts(caplog):
 @pytest.mark.parametrize("code", [200, 422, 503, 500])
 def test_latency_logs_success_and_failures(client, caplog, monkeypatch, code):
     from api.main import _loader
-    payload = dict(delivery_delay_days=0, review_comment_length=0, has_comment=False, payment_type_encoded=0)
+    payload = {
+        "delivery_delay_days": 0,
+        "review_comment_length": 0,
+        "has_comment": False,
+        "payment_type_encoded": 0,
+    }
     if code == 422:
         payload = {}
     elif code == 503:

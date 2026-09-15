@@ -9,14 +9,13 @@ import json
 import logging
 import time
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import FastAPI, HTTPException
 
 from api.model_loader import ModelLoader
 from api.schemas import HealthResponse, PredictRequest, PredictResponse
 from api.translator import translate_french_to_portuguese
-
 
 logging.basicConfig(
     level=logging.INFO,
@@ -50,16 +49,7 @@ app = FastAPI(
 
 @app.middleware("http")
 async def record_predict_latency(request, call_next):
-    """
-    Journalise la latence des appels /predict.
-
-    Le log contient :
-    - timestamp UTC
-    - durée en millisecondes
-    - code HTTP
-    - version réelle du modèle MLflow
-    - run_id MLflow
-    """
+    """Journalise la latence des appels /predict."""
     if request.url.path != "/predict":
         return await call_next(request)
 
@@ -70,7 +60,6 @@ async def record_predict_latency(request, call_next):
         response = await call_next(request)
         status = response.status_code
         return response
-
     finally:
         latency_ms = round(
             (time.perf_counter() - started) * 1000,
@@ -81,9 +70,7 @@ async def record_predict_latency(request, call_next):
             json.dumps(
                 {
                     "event": "predict_latency",
-                    "timestamp_utc": datetime.now(
-                        timezone.utc
-                    ).isoformat(),
+                    "timestamp_utc": datetime.now(UTC).isoformat(),
                     "latency_ms": latency_ms,
                     "status_code": status,
                     "model_version": _loader.model_version,
@@ -99,12 +86,7 @@ async def record_predict_latency(request, call_next):
     tags=["monitoring"],
 )
 def health() -> HealthResponse:
-    """
-    Vérification de santé.
-
-    L'endpoint répond HTTP 200 même si aucun modèle
-    n'est actuellement chargé.
-    """
+    """Vérification de santé."""
     return HealthResponse(
         status="ok",
         model_loaded=_loader.is_loaded,
@@ -120,9 +102,7 @@ def health() -> HealthResponse:
     tags=["monitoring"],
 )
 def reload_model():
-    """
-    Force le rechargement du modèle depuis MLflow.
-    """
+    """Force le rechargement du modèle depuis MLflow."""
     _loader.reload()
 
     return {
@@ -140,14 +120,7 @@ def reload_model():
     tags=["inference"],
 )
 def predict(request: PredictRequest) -> PredictResponse:
-    """
-    Prédit si un client est satisfait.
-
-    Compatibilité :
-    - nouveau modèle V2 : utilise review_comment_message ;
-    - anciens clients : peuvent continuer à envoyer uniquement
-      les features numériques historiques.
-    """
+    """Prédit si un client est satisfait."""
     if not _loader.is_loaded:
         raise HTTPException(
             status_code=503,
@@ -161,18 +134,14 @@ def predict(request: PredictRequest) -> PredictResponse:
     original_comment = request.review_comment_message.strip()
 
     if original_comment:
-        # Nouveau flux texte :
-        # traduction FR -> PT avant passage au modèle.
         translated_comment = translate_french_to_portuguese(
             original_comment
         )
-
         review_comment_length = len(translated_comment)
         has_comment = bool(translated_comment)
-
     else:
-        # Compatibilité avec les anciens clients qui n'envoient
-        # pas review_comment_message.
+        # Compatibilité avec les clients historiques qui n'envoient
+        # pas encore review_comment_message.
         translated_comment = ""
         review_comment_length = request.review_comment_length
         has_comment = request.has_comment
@@ -187,25 +156,22 @@ def predict(request: PredictRequest) -> PredictResponse:
 
     try:
         satisfied, probability = _loader.predict_one(row)
-
     except Exception as exc:
         logger.error(
             "Erreur prediction : %s",
             exc,
         )
-
         raise HTTPException(
             status_code=500,
             detail=str(exc),
         ) from exc
 
-    # Audit fonctionnel de la prédiction.
     predict_logger.info(
         (
             "ts=%s delay=%.1f len=%d comment=%s "
             "payment=%d satisfied=%s proba=%.4f"
         ),
-        datetime.now(timezone.utc).isoformat(),
+        datetime.now(UTC).isoformat(),
         request.delivery_delay_days,
         review_comment_length,
         has_comment,

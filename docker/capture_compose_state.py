@@ -3,15 +3,21 @@
 import argparse
 import json
 import subprocess
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 
 def capture(compose_file, output):
     command = ["docker", "compose", "-f", compose_file, "ps", "--all", "--format", "json"]
-    started = datetime.now(timezone.utc).isoformat()
+    started = datetime.now(UTC).isoformat()
     try:
-        result = subprocess.run(command, capture_output=True, text=True, timeout=60)
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
         code, stdout, stderr = result.returncode, result.stdout, result.stderr
     except (OSError, subprocess.TimeoutExpired) as exc:
         code, stdout, stderr = 1, "", str(exc)

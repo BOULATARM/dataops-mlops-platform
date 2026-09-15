@@ -1,4 +1,8 @@
-import duckdb, os, sys
+import os
+import sys
+
+import duckdb
+
 db = os.environ.get("DUCKDB_PATH", "NOT_SET")
 print("DUCKDB_PATH:", db)
 try:
@@ -17,6 +21,6 @@ try:
     sample = con.execute("SELECT review_score, satisfied, delivery_delay_days FROM main_gold.gold_reviews_features LIMIT 3").fetchall()
     print("gold_reviews_features sample:", sample)
     con.close()
-except Exception as e:
+except Exception as e:  # noqa: BLE001
     print("ERREUR:", e)
     sys.exit(1)
