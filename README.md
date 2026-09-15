@@ -115,6 +115,11 @@ cp .env.example .env
 
 ### 2. Lancer le stack Docker
 
+Preuve horodatée de l'état réel (depuis la racine) :
+`python docker/capture_compose_state.py`. Le fichier `docs/evidence/compose-state.json`
+contient la commande, la sortie et son code de retour ; une erreur Docker n'est
+pas une preuve de conteneurs opérationnels. Archiver ce fichier après chaque déploiement.
+
 ```bash
 cd docker
 docker compose up -d
