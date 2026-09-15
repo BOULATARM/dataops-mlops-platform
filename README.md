@@ -98,6 +98,19 @@ Transformations appliquées par dbt :
 
 ## Prérequis
 
+### Déploiement automatique
+
+Sur un push vers `main`, `deploy` attend les builds et le smoke test puis exécute
+`ansible/playbook.yml` sur le commit exact. Le périmètre de l'infrastructure EC2
+existante est **FastAPI uniquement** ; MLflow doit être accessible depuis son conteneur.
+Dans l'environnement GitHub `production`, configurer les secrets `DEPLOY_SSH_KEY`,
+`DEPLOY_KNOWN_HOSTS` (empreinte vérifiée du serveur), et les variables `DEPLOY_HOST`,
+`DEPLOY_USER`, `MLFLOW_TRACKING_URI` (URL sans identifiants). L'artifact
+`deployment-<commit>-<tentative>` conserve le résultat Ansible et l'état Compose.
+Un `/health` avec `model_loaded=false` fait échouer le déploiement.
+La livraison reste à prouver par un premier run réussi ; aucune exécution distante
+n'est déduite de la seule présence de ce job.
+
 - Python 3.11+
 - Docker Desktop
 - Git
