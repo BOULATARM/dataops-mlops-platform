@@ -40,3 +40,17 @@ Thumbs.db
 .vscode/
 .idea/
 *.code-workspace
+# Local ML environment
+.venv-ml/
+
+# Terraform local state
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.backup
+
+# LaTeX temporary files
+*.aux
+*.lof
+*.log
+*.out
+*.toc
