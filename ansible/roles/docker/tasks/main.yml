@@ -1,27 +1,59 @@
 ---
-# Cree le dossier qui stocke la cle GPG officielle de Docker.
 - name: Create Docker apt keyring directory
   ansible.builtin.file:
     path: /etc/apt/keyrings
     state: directory
+    owner: root
+    group: root
     mode: "0755"
 
-# Telecharge la cle GPG Docker pour verifier les paquets installes.
+# Supprime les anciennes définitions Docker afin d'éviter
+# plusieurs Signed-By différents pour le même dépôt.
+- name: Remove legacy Docker repository definitions
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/apt/sources.list.d/docker.list
+    - /etc/apt/sources.list.d/docker.sources
+    - /etc/apt/sources.list.d/download_docker_com_linux_ubuntu.list
+    - /etc/apt/sources.list.d/download_docker_com_linux_ubuntu.sources
+
+- name: Remove legacy Docker GPG key
+  ansible.builtin.file:
+    path: /etc/apt/keyrings/docker.gpg
+    state: absent
+
 - name: Download Docker GPG key
   ansible.builtin.get_url:
     url: https://download.docker.com/linux/ubuntu/gpg
     dest: /etc/apt/keyrings/docker.asc
+    owner: root
+    group: root
     mode: "0644"
+    force: true
 
-# Ajoute le depot officiel Docker pour Ubuntu.
-- name: Add Docker apt repository
-  ansible.builtin.apt_repository:
-    repo: "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
-    filename: docker
-    state: present
+- name: Detect Debian architecture
+  ansible.builtin.command:
+    cmd: dpkg --print-architecture
+  register: docker_apt_arch
+  changed_when: false
 
-# Installe Docker Engine et le plugin Docker Compose moderne.
-- name: Install Docker CE and Compose plugin
+- name: Configure Docker apt repository
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/docker.list
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      deb [arch={{ docker_apt_arch.stdout }} signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable
+
+- name: Update apt cache after Docker repository configuration
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 0
+
+- name: Install Docker packages
   ansible.builtin.apt:
     name:
       - docker-ce
@@ -30,18 +62,34 @@
       - docker-buildx-plugin
       - docker-compose-plugin
     state: present
-    update_cache: true
 
-# Ajoute l'utilisateur ubuntu au groupe docker pour lancer docker sans sudo apres reconnexion.
+- name: Ensure Docker service is enabled and running
+  ansible.builtin.service:
+    name: docker
+    state: started
+    enabled: true
+
 - name: Add deployment user to docker group
   ansible.builtin.user:
     name: "{{ ansible_user }}"
     groups: docker
     append: true
+  when: ansible_user != "root"
 
-# Active Docker au demarrage et le lance immediatement.
-- name: Enable and start Docker service
-  ansible.builtin.service:
-    name: docker
-    state: started
-    enabled: true
+- name: Verify Docker installation
+  ansible.builtin.command:
+    cmd: docker --version
+  register: docker_version
+  changed_when: false
+
+- name: Verify Docker Compose installation
+  ansible.builtin.command:
+    cmd: docker compose version
+  register: docker_compose_version
+  changed_when: false
+
+- name: Show Docker versions
+  ansible.builtin.debug:
+    msg:
+      - "{{ docker_version.stdout }}"
+      - "{{ docker_compose_version.stdout }}"
