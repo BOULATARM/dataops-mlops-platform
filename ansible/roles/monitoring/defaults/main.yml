@@ -1,0 +1,7 @@
+---
+monitoring_project_dir: /opt/mlops-monitoring
+# The app role creates this file when absent; this role never modifies it.
+monitoring_env_file: /app/dataops-mlops-platform/.env
+# Optional Ansible Vault values or environment overrides for Compose.
+# Keys: GRAFANA_ADMIN_USER and GRAFANA_ADMIN_PASSWORD.
+monitoring_environment: {}

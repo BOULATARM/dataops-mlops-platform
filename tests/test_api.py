@@ -13,7 +13,39 @@ Couvre :
 - transmission de la feature texte au modèle
 """
 
+from prometheus_client.parser import text_string_to_metric_families
+
 from api.constants import FEATURE_ORDER
+
+
+class TestMetrics:
+    def test_metrics_exposes_request_labels_and_latency(self, client):
+        client.get("/health")
+        response = client.get("/metrics")
+        assert response.status_code == 200
+        samples = [
+            sample
+            for family in text_string_to_metric_families(response.text)
+            for sample in family.samples
+        ]
+        expected = {"handler": "/health", "method": "GET", "status": "200"}
+        assert any(
+            sample.name == "http_requests_total"
+            and sample.labels == expected and sample.value >= 1
+            for sample in samples
+        )
+        assert any(
+            sample.name == "http_request_duration_seconds_bucket"
+            and all(sample.labels.get(key) == value for key, value in expected.items())
+            for sample in samples
+        )
+        assert not any(sample.labels.get("handler") == "/metrics" for sample in samples)
+
+    def test_metrics_hidden_from_openapi(self, client):
+        assert "/metrics" not in client.get("/openapi.json").json()["paths"]
+
+    def test_metrics_available_without_model(self, client_no_model):
+        assert client_no_model.get("/metrics").status_code == 200
 
 # ---------------------------------------------------------------------------
 # /health

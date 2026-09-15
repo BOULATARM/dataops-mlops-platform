@@ -12,6 +12,7 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 
 from fastapi import FastAPI, HTTPException
+from prometheus_fastapi_instrumentator import Instrumentator, metrics
 
 from api.model_loader import ModelLoader
 from api.schemas import HealthResponse, PredictRequest, PredictResponse
@@ -45,6 +46,17 @@ app = FastAPI(
     version="1.1.0",
     lifespan=lifespan,
 )
+
+# One instrumentation per app; scrapes must not inflate API traffic.
+# Metric names/labels follow prometheus-fastapi-instrumentator 7.0.0.
+Instrumentator(
+    should_group_status_codes=False,
+    excluded_handlers=[r"^/metrics$"],
+).add(metrics.requests()).add(
+    metrics.latency(
+        buckets=(0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60),
+    )
+).instrument(app).expose(app, include_in_schema=False)
 
 
 @app.middleware("http")

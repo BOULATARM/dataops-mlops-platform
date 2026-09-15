@@ -5,6 +5,9 @@ mlflow==2.13.0
 scikit-learn==1.9.0
 pydantic==2.7.1
 python-dotenv==1.0.1
+# Observability: compatible with FastAPI 0.111 / Starlette 0.37.
+prometheus-client==0.21.1
+prometheus-fastapi-instrumentator==7.0.0
 
 pandas==2.3.3
 torch==2.13.0+cpu

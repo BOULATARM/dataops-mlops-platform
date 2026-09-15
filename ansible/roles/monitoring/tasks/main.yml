@@ -27,3 +27,88 @@
         echo "ERROR - FastAPI does not respond on http://localhost:8100/health"
         exit 1
       fi
+
+# Separate configuration directory lets copy detect changes even after the app
+# role updates its Git checkout. Compose keeps its existing named volumes.
+- name: Create monitoring configuration directories
+  ansible.builtin.file:
+    path: "{{ monitoring_project_dir }}/{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - docker
+    - monitoring/prometheus
+    - monitoring/grafana/provisioning/datasources
+    - monitoring/grafana/provisioning/dashboards
+    - monitoring/grafana/dashboards
+
+- name: Copy versioned monitoring configuration
+  ansible.builtin.copy:
+    src: "{{ role_path }}/../../../{{ item }}"
+    dest: "{{ monitoring_project_dir }}/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - docker/docker-compose.monitoring.yml
+    - monitoring/prometheus/prometheus.yml
+    - monitoring/grafana/provisioning/datasources/prometheus.yml
+    - monitoring/grafana/provisioning/dashboards/dashboards.yml
+    - monitoring/grafana/dashboards/mlops-overview.json
+  register: monitoring_configuration
+
+# No down, volume removal or orphan removal. Recreate only when copied
+# configuration changes, so Prometheus also picks up its new scrape config.
+- name: Reconcile monitoring containers and wait for health checks
+  ansible.builtin.command:
+    argv: >-
+      {{ ['docker', 'compose', '--env-file', monitoring_env_file,
+          '-f', 'docker/docker-compose.monitoring.yml',
+          'up', '-d', '--wait', '--wait-timeout', '120']
+         + (['--force-recreate'] if monitoring_configuration.changed else [])
+         + ['prometheus', 'grafana', 'node-exporter'] }}
+    chdir: "{{ monitoring_project_dir }}"
+  environment: "{{ monitoring_environment }}"
+  register: monitoring_compose
+  changed_when: >-
+    monitoring_configuration.changed or
+    ((monitoring_compose.stdout ~ monitoring_compose.stderr)
+      is search('Creating|Created|Recreating|Recreated|Starting|Started'))
+  no_log: true
+
+- name: Verify monitoring HTTP endpoints
+  ansible.builtin.uri:
+    url: "{{ item }}"
+    status_code: 200
+    use_proxy: false
+  loop:
+    - http://127.0.0.1:9090/-/ready
+    - http://127.0.0.1:3200/api/health
+    - http://127.0.0.1:9100/metrics
+    - http://127.0.0.1:8100/metrics
+  register: monitoring_health
+  until: monitoring_health.status | default(0) == 200
+  retries: 12
+  delay: 5
+  when: not ansible_check_mode
+
+- name: Verify all three Prometheus scrape targets are up
+  ansible.builtin.uri:
+    url: http://127.0.0.1:9090/api/v1/targets
+    status_code: 200
+    return_content: true
+    use_proxy: false
+  register: monitoring_targets
+  until:
+    - monitoring_targets.status | default(0) == 200
+    - monitoring_targets.json.status | default('') == 'success'
+    - >-
+      (monitoring_targets.json.data.activeTargets | default([])
+       | selectattr('health', 'equalto', 'up')
+       | map(attribute='labels.job') | list | sort)
+      == ['fastapi', 'node-exporter', 'prometheus']
+  retries: 12
+  delay: 5
+  when: not ansible_check_mode

@@ -286,3 +286,38 @@ numériques par PSI et émet un WARNING si `drift_detected` ou si la sévérité
 pas `stable` (seuils 0,1/0,2). Le script local étant absent à l'audit de ce checkout,
 ce moniteur est nouvellement ajouté : son branchement au job serveur reste à vérifier.
 Ce contrôle ne mesure pas à lui seul la performance du modèle ni la dérive du texte.
+
+### Observability
+
+FastAPI → Prometheus → Grafana et Node Exporter → Prometheus → Grafana.
+Le fichier `docker/docker-compose.monitoring.yml` provisionne automatiquement
+le datasource Prometheus et le dashboard **MLOps Platform Overview** (12 panneaux).
+
+- Grafana : http://localhost:3200
+- Prometheus : http://localhost:9090
+- FastAPI metrics : http://localhost:8100/metrics
+- Node Exporter : http://localhost:9100/metrics
+
+Définir `GRAFANA_ADMIN_USER` et `GRAFANA_ADMIN_PASSWORD` dans l'environnement
+ou dans un fichier privé `.env` (voir `.env.example` ; remplacer `change-me`).
+Depuis la racine, la commande à exécuter manuellement est :
+
+```bash
+docker compose --env-file .env -f docker/docker-compose.monitoring.yml up -d
+```
+
+FastAPI doit déjà exposer le port 8100 ; Prometheus le joint via
+`host.docker.internal:8100` et `host-gateway`. Node Exporter cible un hôte Linux
+avec `/proc`, `/sys` et la racine montés en lecture seule ; sous Docker Desktop,
+les mesures concernent la VM Linux, pas l'hôte Windows.
+Les volumes `prometheus_data` et `grafana_data` sont persistants.
+Les identifiants Grafana initialisent uniquement une base Grafana neuve.
+
+Le rôle Ansible `monitoring`, déjà inclus dans le playbook, copie la configuration
+dans `/opt/mlops-monitoring`, applique Compose et vérifie les trois scrapes.
+Il lit par défaut `/app/dataops-mlops-platform/.env` sans le modifier ;
+`monitoring_env_file` permet de choisir un autre fichier et
+`monitoring_environment` de fournir les variables Grafana via Ansible Vault.
+Conserver le même nom de projet Compose pour retrouver les volumes existants.
+L'exécution suivante doit être sans changement si la configuration et les services
+sont inchangés. Les tests API ajoutés sont dans `tests/test_api.py`.
