@@ -1,0 +1,391 @@
+\documentclass[11pt,a4paper]{report}
+\usepackage{fontspec}
+\setmainfont{TeX Gyre Pagella}
+\setsansfont{TeX Gyre Heros}
+\setmonofont{Latin Modern Mono}
+\usepackage[french]{babel}
+\usepackage[margin=2cm,headheight=15pt]{geometry}
+\usepackage{graphicx,booktabs,tabularx,longtable,array,float,xcolor}
+\usepackage{amsmath,tikz}
+\usetikzlibrary{positioning,arrows.meta}
+\usepackage{titlesec,fancyhdr,enumitem,microtype}
+\usepackage{hyperref}
+\usepackage{xurl}
+\definecolor{navy}{HTML}{16324F}
+\definecolor{teal}{HTML}{007F86}
+\definecolor{pale}{HTML}{EDF5F6}
+\hypersetup{colorlinks=true,linkcolor=navy,urlcolor=teal,pdftitle={Plateforme DataOps et MLOps Olist},pdfauthor={MedallionTeam}}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{5pt}
+\setlength{\emergencystretch}{3em}
+\renewcommand{\arraystretch}{1.18}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+\pagestyle{fancy}\fancyhf{}
+\fancyhead[L]{\small\sffamily DataOps \& MLOps | Olist}
+\fancyhead[R]{\small\sffamily Faculté des Sciences Ben M'Sik}
+\fancyfoot[C]{\thepage}
+\titleformat{\chapter}[display]{\sffamily\bfseries\color{navy}}{\large CHAPITRE \thechapter}{5pt}{\huge}
+\titlespacing*{\chapter}{0pt}{-12pt}{18pt}
+\titleformat{\section}{\Large\sffamily\bfseries\color{teal}}{\thesection}{0.7em}{}
+\newcommand{\code}[1]{\nolinkurl{#1}}
+\newcommand{\shot}[3]{\begin{figure}[H]\centering\includegraphics[width=\linewidth,height=0.32\textheight,keepaspectratio]{figures/#1}\caption{#2}\label{#3}\end{figure}}
+\newcommand{\note}[1]{\par\smallskip\noindent\colorbox{pale}{\parbox{\dimexpr\linewidth-2\fboxsep}{#1}}\par\smallskip}
+\begin{document}
+\begin{titlepage}
+\centering
+{\Large\sffamily Faculté des Sciences Ben M'Sik\par}
+\vspace{0.4cm}
+{\large Module MLOps \& DataOps\par}
+{\large Encadrant : Pr. Mohammed AIT DAOUD\par}
+\vspace{1.6cm}
+{\color{teal}\rule{\linewidth}{2pt}}\par
+\vspace{0.5cm}
+{\Huge\sffamily\bfseries\color{navy} Plateforme DataOps\par et MLOps\par}
+\vspace{0.5cm}
+{\LARGE Prédiction de la satisfaction client\par}
+{\Large Cas d'étude : e-commerce Olist\par}
+\vspace{0.5cm}
+{\color{teal}\rule{\linewidth}{2pt}}\par
+\vspace{1cm}
+{\large\bfseries Rapport de projet -- MedallionTeam\par}
+\vspace{0.5cm}
+\par\noindent\begin{tabularx}{\linewidth}{Y Y}\toprule
+\textbf{Membre} & \textbf{Responsabilité principale}\\\midrule
+Mouad BOULATARM & Product Owner, ML et DevOps\\
+Ghazli & Scrum Master et CI/CD\\
+Ayoub Hamroudi & Ingestion dlt\\
+Mohamed & Transformations dbt\\
+Maroua Ben-Hub & Qualité des données\\
+Hajar Kobi & FastAPI et Docker\\
+Lina & Analyse et orchestration Dagster\\\bottomrule
+\end{tabularx}
+\vfill
+Année universitaire 2025--2026\par
+Version du rapport : 9 septembre 2026\par
+\small\url{https://github.com/BOULATARM/dataops-mlops-platform}
+\end{titlepage}
+\pagenumbering{roman}
+\chapter*{Résumé}\addcontentsline{toc}{chapter}{Résumé}
+Ce projet transforme les données e-commerce Olist en un produit de classification de la satisfaction client. Il associe l'ingestion avec dlt, le stockage DuckDB, les transformations et tests dbt, l'orchestration Dagster, un modèle scikit-learn, le suivi MLflow et une API FastAPI conteneurisée. Une interface Streamlit facilite la démonstration métier.
+
+La vérification de la plateforme confirme un run Dagster réussi de 16 assets le 31 août 2026, ainsi qu'un modèle \code{SatisfactionClassifier} version 19 en Production, associé à l'alias \code{champion}. Le modèle TF-IDF et régression logistique atteint une accuracy de 87,25\% sur 19\,682 observations de test. Le rappel des avis insatisfaits est de 52,92\%, ce qui limite son utilisation comme détecteur exhaustif des réclamations.
+
+Le rapport s'appuie sur le cahier des charges \code{PROJETS.pdf}, les fichiers du projet et les interfaces effectivement consultées les 8 et 9 septembre 2026. Il précise les écarts entre le code local, la documentation historique et la plateforme déployée. Les résultats des appels API du 9 septembre sont distingués des captures historiques de juillet.
+
+\textbf{Mots-clés :} DataOps, MLOps, architecture médaillon, qualité, satisfaction client, TF-IDF, MLflow, orchestration, CI/CD, dérive.
+
+\section*{Périmètre de vérification}
+L'analyse est une inspection documentaire et fonctionnelle. Elle ne constitue ni un test de charge, ni un audit complet du serveur, ni une nouvelle campagne d'entraînement. Les appels de démonstration ne modifient pas les données métier. Le dernier run de référence est consulté sans le relancer.
+
+Les captures anciennes sont explicitement identifiées. L'état des conteneurs via \code{docker ps} et le lineage de l'interface dbt restent à capturer : l'accès navigateur a été interrompu par une limite d'utilisation. Aucun résultat de terminal n'a été reconstitué.
+\tableofcontents
+\listoffigures
+\clearpage\pagenumbering{arabic}
+
+\chapter{Vision du produit et exigences}
+\section{Problématique et valeur métier}
+Une marketplace reçoit des avis, commandes et paiements provenant de plusieurs sources. L'exploitation manuelle de ces informations ralentit le repérage des clients insatisfaits. Le produit proposé transforme ces données en tables fiables et en prédictions accessibles aux équipes CRM et qualité.
+
+La question centrale est la suivante : comment industrialiser l'analyse de satisfaction, depuis les sources jusqu'à une API observable, tout en conservant la traçabilité des données et des modèles ? Le gain attendu est une meilleure priorisation du traitement des avis. Aucun gain financier ni réduction chiffrée du temps de traitement n'est présenté comme mesuré.
+
+\par\noindent\begin{tabularx}{\linewidth}{p{3cm}Y}\toprule
+\textbf{Consommateur} & \textbf{Besoin servi}\\\midrule
+CRM / support & Classer les avis et prioriser leur examen humain.\\
+Équipe qualité & Examiner les facteurs associés aux retards et à l'insatisfaction.\\
+Data Engineers & Suivre les chargements, les contrôles et les dépendances.\\
+ML Engineers & Comparer les expériences et identifier le modèle servi.\\\bottomrule
+\end{tabularx}
+
+\section{Data Strategy et gouvernance}
+DuckDB centralise les couches analytiques. La Bronze conserve les données sources et les métadonnées d'ingestion ; la Silver applique les règles de qualité ; la Gold expose les agrégats et variables ML. Git versionne le code et les contrats ; MLflow conserve les expériences et versions du modèle.
+
+Le contrat \code{docs/data_contract.md} formalise les colonnes attendues, les contraintes et les changements de schéma. Une suppression ou un renommage doit être examiné avec les consommateurs aval. Le dictionnaire \code{docs/data_dictionary.md} documente les données exposées.
+
+\section{Lecture du cahier des charges}
+Le document de référence demande au minimum dlt, DuckDB, dbt, Dagster, un composant ML, MLflow, FastAPI, Docker, GitHub Actions et un monitoring simple. Il impose également un backlog, des user stories, au moins trois sprints avec reviews et rétrospectives, ainsi qu'une collaboration par Git et Pull Requests. La soutenance prévoit 15 minutes de présentation, 10 minutes de démonstration et 5 minutes de questions.
+
+Ces attentes servent de grille d'évaluation. Les instructions contenues dans le document sont traitées comme des exigences pédagogiques, et non comme une autorisation de modifier le serveur ou de publier des informations.
+
+\chapter{Organisation Agile et collaboration}
+\section{Backlog et critères d'acceptation}
+Les identifiants suivants reprennent le backlog du dépôt, sans réattribuer les numéros aux fonctionnalités ajoutées ensuite.
+\par\noindent\begin{tabularx}{\linewidth}{p{1.4cm}Y Y}\toprule
+\textbf{US} & \textbf{Objectif} & \textbf{Critère de vérification}\\\midrule
+US-02 & Ingestion par entité & Tables Bronze alimentées et erreurs isolables.\\
+US-10 & Nettoyage Silver & Typage, filtrage et clés documentés.\\
+US-14/15 & Contrat et tests métier & Échec du build si les règles sont violées.\\
+US-22/24 & Entraînement et registre & Paramètres, métriques et version traçables.\\
+US-25 & API de prédiction & Réponses \code{/health} et \code{/predict}.\\
+US-29 & Orchestration & Dépendances du pipeline déclarées.\\
+US-30 & Validation CI & Lint, tests, build et smoke test.\\\bottomrule
+\end{tabularx}
+
+\section{Trois sprints documentés}
+\textbf{Sprint 1 -- ingestion et Bronze, une semaine, 35 points engagés.}
+La review décrit les sources CSV/JSON/API, les pipelines par entité et la vérification post-ingestion. La rétrospective retient le découpage par source et les métadonnées communes ; elle identifie le verrouillage tardif des dépendances et le manque de tests unitaires des sources.
+
+\textbf{Sprint 2 -- transformation et qualité, une semaine, 58 points engagés.}
+Les modèles Silver et Gold, macros SQL, contrats et tests sont livrés selon la review. Les analyses métier restent exploratoires. La rétrospective souligne l'oubli initial de \code{dbt deps} et recommande de documenter chaque modèle au fil de son développement.
+
+\textbf{Sprint 3 -- ML et industrialisation, une semaine, 71 points engagés.}
+La review couvre l'entraînement, MLflow, FastAPI, Docker et la CI. Elle reporte encore l'intégration des assets ML et le monitoring avancé. Les observations du serveur montrent que les assets \code{ml_training}, \code{data_drift_check} et \code{api_model_reload} ont été ajoutés ultérieurement. Cette évolution ne doit pas être confondue avec le contenu initial du sprint.
+
+\section{Git et démarche Lean}
+Le dépôt public consulté présente 30 commits et les dossiers applicatifs. L'historique Actions montre des validations sur commits et Pull Requests, dont la PR \#9 relative à l'infrastructure. Les échecs CI historiques puis leurs corrections illustrent une boucle de retour rapide. Les fixtures limitent le coût des validations, et l'automatisation réduit les opérations manuelles répétitives.
+
+\shot{18_github_repo_structure.png}{Structure du dépôt public, capture du 9 septembre 2026.}{fig:repo}
+
+\chapter{Architecture et pipeline DataOps}
+\section{Vue d'ensemble}
+\begin{figure}[H]\centering
+\begin{tikzpicture}[node distance=0.6cm and 0.65cm,box/.style={draw=teal,rounded corners,fill=pale,text width=3cm,minimum height=1cm,align=center,font=\small\sffamily},arr/.style={-{Stealth},thick,teal}]
+\node[box](s){Sources Olist\\CSV / JSON / API};
+\node[box,right=of s](b){dlt + DuckDB\\Bronze};
+\node[box,right=of b](si){dbt + tests\\Silver};
+\node[box,below=of si](g){dbt + tests\\Gold / features};
+\node[box,left=of g](m){scikit-learn\\TF-IDF + LogReg};
+\node[box,left=of m](r){MLflow\\Tracking / Registry};
+\node[box,below=of r](a){FastAPI\\Prédiction};
+\node[box,right=of a](u){Streamlit\\Utilisateur};
+\node[box,right=of u](d){Monitoring\\PSI / santé};
+\draw[arr](s)--(b);\draw[arr](b)--(si);\draw[arr](si)--(g);\draw[arr](g)--(m);\draw[arr](m)--(r);\draw[arr](r)--(a);\draw[arr](a)--(u);\draw[arr](g)--(d);
+\end{tikzpicture}
+\caption{Schéma de synthèse du produit. Dagster orchestre les traitements ; Docker isole les services et GitHub Actions valide le code. Ce schéma explicatif n'est pas une capture du lineage dbt.}
+\end{figure}
+
+\section{Ingestion et stockage}
+Les pipelines dlt chargent les entités Olist dans DuckDB. Les colonnes \code{_loaded_at}, \code{_source_file} et \code{_batch_id} permettent de relier un enregistrement à son chargement. Les sources couvrent commandes, clients, articles, produits, avis, paiements, vendeurs, géolocalisation, catégories, produits JSON et taux de change.
+
+La conservation append-only en Bronze facilite l'audit, mais nécessite de maîtriser les doublons lors des rechargements. Un contrôle du nombre de lignes ne suffit pas à garantir l'idempotence. Les transformations Silver doivent respecter le grain métier de chaque table.
+
+\section{Silver et Gold}
+La Silver nettoie les chaînes, convertit les dates et nombres et applique les règles de validité. Le code local des paiements et articles ne contient pas de déduplication explicite : il ne faut donc pas généraliser cette propriété à toutes les tables. Des tests d'unicité composite et de stabilité des volumes sont recommandés.
+
+La Gold comprend cinq marts : \code{gold_orders_summary}, \code{gold_customer_rfm}, \code{gold_product_performance}, \code{gold_seller_ranking} et \code{gold_reviews_features}. Le dernier alimente le modèle. MLflow identifie la source d'entraînement comme \code{main_gold.gold_reviews_features}.
+
+\section{Orchestration}
+Le run \code{058f2416-256e-490c-a2bb-5b0a92f839bf}, terminé le 31 août 2026, comporte 16 assets et dure environ 1 min 58 s. Il enchaîne 11 assets Bronze, Silver, Gold, dérive, entraînement et rechargement API. Les dépendances permettent de bloquer les traitements aval lorsqu'une étape échoue.
+
+\shot{04_dagster_run_success.png}{Run de référence : succès de 16 assets, consulté le 9 septembre.}{fig:run}
+
+\section{Planification et fraîcheur}
+Le schedule \code{daily_pipeline_02h_utc} est défini pour 02:00 UTC. La capture récente montre un interrupteur visuellement désactivé et un dernier événement ancien. L'existence du schedule ne prouve donc pas une exécution quotidienne actuellement active. Les runs récents consultés sont manuels ; la fraîcheur opérationnelle doit être contrôlée avant la soutenance.
+\shot{02_dagster_schedule.png}{Configuration du schedule au moment de l'inspection ; ne pas la présenter comme une preuve d'activation actuelle.}{fig:schedule}
+
+\chapter{Qualité, contrats et traçabilité}
+\section{Règles de qualité}
+\par\noindent\begin{tabularx}{\linewidth}{p{3cm}Y}\toprule
+\textbf{Dimension} & \textbf{Contrôles présents ou à compléter}\\\midrule
+Complétude & \code{not_null} sur les clés et champs métier obligatoires.\\
+Validité & Scores entre 1 et 5, valeurs catégorielles autorisées, montants valides.\\
+Cohérence & Tests SQL métier sur les revenus et scores.\\
+Intégrité & \code{relationships} entre les tables dépendantes.\\
+Unicité & Tests sur les entités ; vérifier les clés composites des articles et paiements.\\
+Fraîcheur & Métadonnées de chargement disponibles ; seuil et alerte opérationnels à confirmer.\\\bottomrule
+\end{tabularx}
+
+\section{Résultats réellement observés}
+Les logs du run de référence contiennent les deux bilans suivants :
+\begin{center}\begin{tabular}{lrrr}\toprule
+\textbf{Périmètre} & \textbf{Modèles} & \textbf{Tests de données} & \textbf{Total réussi}\\\midrule
+Build Silver et dépendances & 15 & 43 & 58\\
+Build Gold & 5 & 23 & 28\\\bottomrule
+\end{tabular}\end{center}
+Le premier total regroupe 14 modèles table, un modèle vue et 43 tests. Le second regroupe cinq modèles table et 23 tests. Les deux indiquent \code{WARN=0}, \code{ERROR=0}, \code{SKIP=0}. Il serait inexact de les appeler « 58 tests Silver et 28 tests Gold ».
+
+\shot{14_dbt_silver_tests.png}{Log réel dbt : 43 tests et 15 modèles, PASS=58. Les séquences ANSI visibles proviennent du rendu des logs Dagster.}{fig:silver}
+\shot{15_dbt_gold_tests.png}{Log réel dbt : 23 tests et 5 modèles, PASS=28.}{fig:gold}
+
+\section{Lineage et portée des garanties}
+Les appels \code{ref()} des modèles dbt déclarent les dépendances. Le graphe Dagster décrit l'enchaînement opérationnel des assets, tandis que le lineage dbt apporte le détail SQL entre modèles. Une capture Dagster ne remplace pas une capture dbt. Cette dernière reste à ajouter à partir du site généré par \code{dbt docs generate}.
+
+Les tests réussis démontrent la conformité aux règles exécutées, pas l'absence de toute anomalie. Il faut aussi contrôler les doublons, les variations de volume, les distributions et la pertinence des données pour l'usage métier.
+
+\chapter{Modélisation et évaluation}
+\section{Cible et moment d'utilisation}
+La cible est définie par $y=1$ si \code{review_score}\,$\geq4$, et $y=0$ sinon. Le modèle utilise le texte de l'avis et des variables observées après livraison. Il s'agit donc d'une classification de satisfaction à ce stade du parcours, et non d'une prédiction avant achat ou avant livraison.
+
+\section{Préparation et paramètres vérifiés}
+Le run MLflow \code{9b213b06245e488dab41230c32c0949d} utilise un texte et quatre variables : \code{review_comment_message}, \code{delivery_delay_days}, \code{review_comment_length}, \code{has_comment}, \code{payment_type_encoded}. Le schéma du modèle enregistré confirme ces cinq entrées.
+
+\par\noindent\begin{tabularx}{\linewidth}{Y Y}\toprule
+\textbf{Paramètre} & \textbf{Valeur MLflow}\\\midrule
+Modèle & TF-IDF + LogisticRegression\\
+Vocabulaire maximal & 500\\
+N-grammes / fréquence minimale & 1 à 2 / 5 documents\\
+Régularisation / solveur & $C=1.0$ / liblinear\\
+Partition test / graine & 0,2 / 42\\
+Entraînement / test & 78\,728 / 19\,682 lignes\\
+Total & 98\,410 lignes\\\bottomrule
+\end{tabularx}
+
+Le pipeline local historique utilise uniquement quatre variables numériques et un solveur lbfgs. Les paramètres ci-dessus décrivent la version déployée observée dans MLflow. Avant de revendiquer une reproduction à l'identique, il faut aligner le checkout local avec la révision correspondante du dépôt distant.
+
+\section{Métriques du modèle version 19}
+\begin{center}\begin{tabular}{lr}\toprule
+\textbf{Métrique} & \textbf{Valeur arrondie}\\\midrule
+Accuracy & 0,8725\\
+Précision -- satisfait & 0,8747\\
+Rappel -- satisfait & 0,9742\\
+F1 -- satisfait & 0,9218\\
+ROC-AUC & 0,8514\\
+Précision -- insatisfait & 0,8586\\
+Rappel -- insatisfait & 0,5292\\
+F1 -- insatisfait & 0,6548\\
+F1 macro & 0,7883\\\bottomrule
+\end{tabular}\end{center}
+
+\shot{07_mlflow_training_metrics.png}{Paramètres et métriques du run associé à la version 19, capture du 9 septembre.}{fig:metrics}
+
+\section{Interprétation et limites expérimentales}
+L'accuracy de 87,25\% résume la proportion de bonnes classifications. Le rappel de 52,92\% pour les insatisfaits signifie qu'environ 47,08\% de cette classe n'est pas détectée sur le jeu de test. Le produit peut aider à prioriser les avis, mais nécessite une revue humaine et ne doit pas être utilisé comme filtre exclusif des réclamations.
+
+Les pistes d'amélioration sont une optimisation du seuil sur validation, des pondérations de classes, une comparaison avec un modèle multilingue et une calibration des probabilités. Une validation temporelle et un découpage par client réduiraient le risque de surestimation lié à des observations proches présentes dans plusieurs partitions. Les métriques actuelles ne démontrent pas ces validations supplémentaires.
+
+\chapter{Cycle MLOps et monitoring}
+\section{Tracking, artefacts et Registry}
+MLflow conserve les paramètres, métriques et artefacts du modèle. L'arborescence observée comprend \code{model.pkl}, \code{MLmodel}, les environnements, un exemple d'entrée et \code{classification_report.txt}. La version 19 du modèle \code{SatisfactionClassifier} porte le stage Production et l'alias champion.
+
+\shot{06_mlflow_registry_v19.png}{Registry MLflow : version 19, Production et alias champion.}{fig:registry}
+
+\section{Promotion et rechargement}
+Les événements Dagster du 31 août indiquent \code{promoted: true} et le motif « performances égales ou meilleures ». Ils montrent ensuite le succès de \code{api_model_reload} et le rafraîchissement de la baseline. Une empreinte des données est enregistrée avec la version. Ces preuves confirment ce cycle d'exécution ; elles ne suffisent pas à établir toutes les règles de promotion ou tous les cas de non-réentraînement.
+
+La désignation \code{model_version: Production} renvoyée par l'API est un stage, pas un numéro de version. La version 19 est attestée par le Registry ; l'API gagnerait à retourner aussi l'identifiant numérique réellement chargé et le run source.
+
+\section{Dérive des données}
+Le Population Stability Index compare les proportions de référence $E_i$ et observées $A_i$ dans des compartiments :
+\[PSI=\sum_i(A_i-E_i)\ln(A_i/E_i).\]
+Les proportions nulles doivent être traitées pour éviter une division par zéro. Les bornes et le lissage doivent rester stables pour permettre la comparaison entre runs.
+
+Sur le run de référence, les logs indiquent 98\,410 lignes, \code{severity: stable}, \code{drift_detected: False} et un PSI maximal de 0,000003. Les PSI sont 0,000001 pour le délai de livraison, 0,000003 pour le paiement, et 0 pour longueur, présence de commentaire et cible, aux arrondis affichés.
+
+\note{Un PSI faible indique une stabilité des distributions surveillées. Il ne prouve ni l'absence de dérive sémantique du texte, ni le maintien de la qualité des prédictions. Une mesure des performances avec de nouvelles étiquettes reste nécessaire.}
+
+\shot{08_mlflow_drift_experiment.png}{Capture historique fournie : expérience de monitoring PSI. Elle illustre l'interface, pas la valeur actuelle du run d'août.}{fig:drift}
+
+\section{Disponibilité et temps de réponse}
+Le 9 septembre, \code{/health} retourne HTTP 200 avec \code{model_loaded: true}. Ce point confirme l'état du service lors de l'appel. Il ne mesure pas un taux de disponibilité sur une période. Aucun benchmark p50/p95 ni test de charge n'a été effectué ; les durées Dagster et MLflow sont des durées de traitement, pas des latences d'inférence.
+
+\chapter{Déploiement et démonstration fonctionnelle}
+\section{Services et conteneurisation}
+Le Compose local définit Dagster Webserver, Dagster Daemon, MLflow et FastAPI, avec réseau isolé et volumes persistants. Les ports documentés sont 3100, 5100 et 8100. Streamlit est illustré dans les captures historiques au port 8501. La page HTTP sur le port 80 affiche seulement la page générique « Success! » du serveur web.
+
+Terraform et Ansible proposent une voie de déploiement AWS EC2. Leur présence ne prouve pas que le serveur public observé a été provisionné par ce code. La capture \code{docker compose ps} du serveur reste nécessaire pour attester l'état exact des conteneurs et leurs health checks.
+
+\section{Contrat HTTP}
+\par\noindent\begin{tabularx}{\linewidth}{p{3cm}Y}\toprule
+\textbf{Endpoint} & \textbf{Fonction}\\\midrule
+GET /health & Santé du processus et état de chargement du modèle.\\
+POST /predict & Classe de satisfaction et probabilité de la classe satisfaite.\\
+POST /reload & Rechargement du modèle ; consulté dans la documentation, non appelé pendant l'audit.\\\bottomrule
+\end{tabularx}
+
+\shot{09_fastapi_health.png}{Réponse réelle GET /health du 9 septembre : modèle chargé, aucune erreur de chargement.}{fig:health}
+
+\section{Deux cas d'inférence}
+Les requêtes utilisent des commentaires de démonstration non personnels. Pour le cas positif, le texte est « Produit excellent, je suis très satisfait de mon achat. », le délai vaut $-3$ jours et la longueur 55. Pour le cas négatif, le texte est « Produit horrible, très mauvaise qualité et livraison en retard. », le délai vaut 10 jours et la longueur est calculée depuis le texte. Dans les deux cas, \code{has_comment=true} et \code{payment_type_encoded=0}.
+
+\begin{center}\begin{tabular}{lccc}\toprule
+\textbf{Cas} & \textbf{HTTP} & \textbf{satisfied} & \textbf{P(satisfait)}\\\midrule
+Positif & 200 & true & 0,9736\\
+Négatif & 200 & false & 0,0572\\\bottomrule
+\end{tabular}\end{center}
+Ces deux appels sont des tests fonctionnels, pas une mesure de performance statistique. La probabilité est celle de la classe satisfaite ; pour le cas négatif, sa complémentaire vaut 94,28\%. Elle ne doit pas être appelée une confiance calibrée sans validation supplémentaire.
+
+\shot{10_fastapi_positive_prediction.png}{Swagger : requête positive et réponse réelle avec une probabilité de 0,9736.}{fig:positive}
+La capture négative enregistrée pendant la session montre principalement la requête ; la réponse 0,0572 a été lue dans Swagger mais doit être recadrée pour une preuve visuelle complète.
+
+\section{Interface métier Streamlit}
+Les captures historiques montrent un formulaire d'avis, le type de paiement, le délai et le résultat. Elles établissent l'existence d'une interface métier lors de cette démonstration. Ses probabilités historiques de 97,0\% et 4,6\% ne sont pas celles des nouveaux appels Swagger.
+\shot{12_streamlit_positive.png}{Streamlit, capture historique fournie : exemple positif.}{fig:streamlitpos}
+\shot{13_streamlit_negative.png}{Streamlit, capture historique fournie : exemple négatif.}{fig:streamlitneg}
+
+\chapter{Intégration continue et exploitation}
+\section{Chaîne de validation}
+Le workflow local comprend cinq jobs : lint Ruff, ingestion et build dbt sur fixtures, tests API avec modèle simulé, build des images Docker, puis smoke test du conteneur API. L'historique public consulté montre plusieurs exécutions réussies, notamment CI \#20 et CI \#19, ainsi que des validations de Pull Requests.
+
+Le smoke test accepte un service sans modèle lorsque \code{/predict} renvoie 503. Cela vérifie le comportement dégradé, pas la capacité d'inférence d'un modèle réel. Le build Docker est décrit comme « no push » : une CI verte ne démontre pas un déploiement automatique sur le serveur.
+
+\shot{01_github_actions_success.png}{Capture historique fournie : exécutions GitHub Actions réussies. Le détail des cinq jobs reste à capturer.}{fig:ci}
+
+\section{Reproductibilité et procédures}
+Pour reproduire la plateforme, il faut fixer la révision Git, les versions des dépendances, les sources de données, les paramètres d'entraînement et les volumes persistants. La séparation entre tests sur fixtures et traitement des données complètes permet de garder la CI rapide tout en conservant une validation d'intégration.
+
+\begin{minipage}{\linewidth}\small\begin{verbatim}
+# Depuis la racine du depot, apres configuration de .env
+docker compose -f docker/docker-compose.yml up -d
+docker compose -f docker/docker-compose.yml ps
+
+# Documentation et controles dbt
+dbt deps --project-dir dbt_project --profiles-dir dbt_project
+dbt build --project-dir dbt_project --profiles-dir dbt_project
+dbt docs generate --project-dir dbt_project --profiles-dir dbt_project
+
+# Verification fonctionnelle
+curl http://185.197.250.235:8100/health
+\end{verbatim}\end{minipage}
+Ces commandes sont des indications d'exploitation ; elles n'ont pas été exécutées sur le serveur pendant la collecte. Les chemins et variables doivent correspondre au déploiement retenu. Avant une reprise, vérifier sauvegardes, logs et état des volumes ; une simple reconstruction des images ne sauvegarde pas les données.
+
+\chapter{Bilan, conformité et perspectives}
+\section{Matrice de conformité}
+\begin{longtable}{p{3cm}p{3cm}p{8cm}}\toprule
+\textbf{Exigence} & \textbf{État de preuve} & \textbf{Éléments disponibles et limites}\\\midrule\endhead
+Vision / stratégie & Documenté & Problématique, consommateurs, valeur, contrat.\\
+Agile & Documenté & Backlog et trois sprints avec reviews et rétrospectives.\\
+Git / PR & Observé & Dépôt public, 30 commits et références de PR dans Actions.\\
+dlt / DuckDB & Code + exécution & Assets Bronze et pipeline réussi ; pas d'inspection directe du fichier de production.\\
+dbt / qualité & Observé & Bilans PASS=58 et PASS=28, sans erreur.\\
+Lineage dbt & À compléter & Dépendances SQL présentes ; capture de l'interface dbt absente.\\
+Dagster & Documenté & Exécution à la demande sur corpus historique ; schedule STOPPED volontaire. État persisté du serveur non revérifié.\\
+ML / évaluation & Observé & TF-IDF, partition 80/20 et métriques MLflow.\\
+Tracking / Registry & Observé & Artefacts, version 19 Production et alias champion.\\
+FastAPI & Observé & Santé et deux appels d'inférence HTTP 200.\\
+Docker & Partiel & Compose et services accessibles ; capture des conteneurs manquante.\\
+CI/CD & Partiel & CI et builds visibles ; pas de preuve de livraison automatique au serveur.\\
+Monitoring & Partiel & PSI et santé ; suivi de latence, alertes et performances en continu à compléter.\\
+Documentation & Disponible & README, architecture, runbook, contrats et présent rapport.\\\bottomrule
+\end{longtable}
+
+\section{Priorités de finalisation}
+\paragraph{Décision du 15 septembre 2026 : scheduling.}
+Le pipeline ne doit pas tourner en continu sur le corpus Olist historique.
+Le schedule quotidien reste volontairement STOPPED pour éviter une ingestion
+répétée sans nouvelles données et limiter le coût serveur. Les runs sont déclenchés
+à la demande après modification des sources ou du code. Ce défaut ne remplace
+pas un état déjà persisté dans Dagster ; son état serveur reste à contrôler.
+
+La priorité documentaire est d'obtenir le lineage dbt, l'état Docker et le détail des jobs CI, puis de recadrer la réponse négative et de renouveler les captures Streamlit. La priorité opérationnelle est de vérifier le schedule et la fraîcheur réelle. La priorité ML est d'améliorer le rappel des insatisfaits tout en maîtrisant le taux de faux positifs.
+
+La reproductibilité nécessite de rapprocher le code local historique de la version distante utilisée pour le modèle V19. Les assertions du README sur les features, le nom du modèle et les commandes doivent être alignées avec le code courant. Un enregistrement du numéro exact du modèle dans la réponse API faciliterait la traçabilité des prédictions.
+
+\section{Conclusion}
+La plateforme démontre une chaîne opérationnelle DataOps/MLOps : ingestion, transformation, qualité, entraînement, versionnement et serving. Les preuves observées confirment le fonctionnement du run de référence, le modèle V19 et les appels API. Les limites restantes portent sur la fraîcheur de l'automatisation, certaines preuves de déploiement et la mesure des performances en exploitation. Ces réserves délimitent ce qui est démontré et fournissent un plan concret d'amélioration.
+
+\appendix
+\chapter{Sources et index des preuves}
+\section{Références de travail}
+\begin{enumerate}[leftmargin=*]
+\item Pr. Mohammed AIT DAOUD, \emph{Appel à Projets -- Module MLOps \& DataOps}, \code{PROJETS.pdf}, 8 pages, document fourni. Exigences : pages 3 à 7.
+\item Dépôt public : \url{https://github.com/BOULATARM/dataops-mlops-platform}, consulté le 9 septembre 2026.
+\item Copie locale analysée : commit \code{e217524}, documentation \code{docs/}, modules \code{ml/training/}, \code{api/}, \code{dbt_project/}, \code{docker/} et workflow CI.
+\item Run Dagster de référence : \url{http://185.197.250.235:3100/runs/058f2416-256e-490c-a2bb-5b0a92f839bf}.
+\item Modèle MLflow : \url{http://185.197.250.235:5100/#/models/SatisfactionClassifier/versions/19}.
+\item Documentation API : \url{http://185.197.250.235:8100/docs}.
+\end{enumerate}
+\section{Organisation des fichiers}
+Les figures du 9 septembre utilisent des noms stables dans \code{figures/}. Les captures historiques sont identifiées dans leurs légendes. Les fichiers \code{run_reference.txt} et \code{mlflow_v19.txt} conservent des relevés textuels de l'interface, utiles pour contrôler les chiffres ; ils ne remplacent pas les captures.
+
+Le fichier \code{ETAT_CAPTURES.md} indique les preuves réalisées, les captures historiques et les éléments restant à obtenir. La version LaTeX est autonome avec son dossier \code{figures/} et se compile avec XeLaTeX.
+
+\section{Trame de soutenance}
+\par\noindent\begin{tabularx}{\linewidth}{p{3.2cm}Y}\toprule
+\textbf{Séquence} & \textbf{Contenu conseillé}\\\midrule
+Présentation, 15 min & Besoin et stratégie (2), architecture (3), qualité et orchestration (3), ML et évaluation (3), déploiement et limites (4).\\
+Démonstration, 10 min & Dagster et logs dbt (3), MLflow V19 (2), santé et prédictions (3), CI et bilan (2).\\
+Questions, 5 min & Justifier le grain des données, le rappel négatif, la traçabilité et les limites de monitoring.\\\bottomrule
+\end{tabularx}
+\end{document}
+
+
+

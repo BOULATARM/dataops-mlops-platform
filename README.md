@@ -82,6 +82,16 @@ Transformations appliquées par dbt :
 
 ## Mapping cahier des charges
 
+### Politique d'exécution Dagster
+
+Le pipeline s'exécute **à la demande**, lors d'un changement des données ou du code.
+Le corpus Olist est historique ; le rejouer chaque nuit consommerait les ressources
+du serveur et répéterait l'ingestion Bronze sans bénéfice de fraîcheur.
+`daily_pipeline_02h_utc` reste donc `DefaultScheduleStatus.STOPPED` volontairement.
+Le mode continu n'est pas un objectif de cette livraison. Un état déjà enregistré
+dans Dagster prime sur ce défaut : vérifier l'UI Schedules de l'instance existante
+et arrêter le schedule s'il avait été activé. L'état serveur n'a pas été vérifié ici.
+
 | Composant CDC | Implémentation | Rôle |
 |---|---|---|
 | **dlt** | `dlt_pipelines/` | Ingestion CSV/JSON/API → Bronze DuckDB |
