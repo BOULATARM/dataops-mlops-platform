@@ -152,6 +152,12 @@ uvicorn main:app --port 8100
 
 ### 4. Lineage dbt
 
+La [documentation dbt téléchargeable dans les runs CI](https://github.com/BOULATARM/dataops-mlops-platform/actions/workflows/ci.yml)
+est publiée sous `dbt-docs-<commit>` après le build sur fixtures (rétention : 30 jours).
+Télécharger et extraire l'artifact, puis exécuter `python -m http.server 8080`
+dans ce dossier et ouvrir `http://localhost:8080`. Le catalogue décrit les fixtures CI,
+pas les volumes de production.
+
 ```bash
 cd dbt_project
 dbt docs generate

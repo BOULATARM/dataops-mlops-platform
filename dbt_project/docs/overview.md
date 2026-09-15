@@ -21,6 +21,10 @@ Les agrégats sont recalculés quotidiennement (full-refresh).
 
 ## Lineage
 
+[Télécharger la documentation générée dans GitHub Actions](https://github.com/BOULATARM/dataops-mlops-platform/actions/workflows/ci.yml)
+: artifact `dbt-docs-<commit>`, conservé 30 jours, généré sur les fixtures CI.
+Extraire puis servir avec `python -m http.server 8080` pour explorer le graphe.
+
 ```
 bronze_* → silver_* → gold_orders_summary
                      → gold_customer_rfm

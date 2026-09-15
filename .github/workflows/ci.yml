@@ -83,6 +83,20 @@ jobs:
         working-directory: dbt_project
         run: dbt build --profiles-dir . --target dev
 
+      - name: Generate dbt lineage documentation
+        run: dbt docs generate --project-dir dbt_project --profiles-dir dbt_project --target dev
+
+      - name: Publish downloadable dbt documentation
+        uses: actions/upload-artifact@v4
+        with:
+          name: dbt-docs-${{ github.sha }}
+          path: |
+            dbt_project/target/index.html
+            dbt_project/target/manifest.json
+            dbt_project/target/catalog.json
+          if-no-files-found: error
+          retention-days: 30
+
   # ── 3. test-api ──────────────────────────────────────────────────────────────
   test-api:
     name: API tests (pytest + MockModel)
