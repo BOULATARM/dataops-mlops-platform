@@ -383,6 +383,13 @@ def _log_to_mlflow(report: dict[str, Any]) -> None:
                     "current_rows": float(report.get("current_rows", 0)),
                 }
             )
+            # A baseline creation is not a measured drift comparison.
+            # Export the actual check time for the API Prometheus bridge.
+            if report.get("status") == "checked":
+                mlflow.log_metric(
+                    "drift_checked_timestamp",
+                    datetime.fromisoformat(report["checked_at"]).timestamp(),
+                )
             mlflow.log_dict(report, "drift_report.json")
     except Exception:
         logger.exception("mlflow_log_error")

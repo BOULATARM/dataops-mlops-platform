@@ -5,16 +5,18 @@ FastAPI — classification satisfaction client Olist.
 /predict nécessite un modèle chargé.
 """
 
+import asyncio
 import json
 import logging
 import time
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from datetime import UTC, datetime
 
 from fastapi import FastAPI, HTTPException
 from prometheus_fastapi_instrumentator import Instrumentator, metrics
 
 from api.model_loader import ModelLoader
+from api.prometheus_metrics import PREDICTIONS, register_model_metrics
 from api.schemas import HealthResponse, PredictRequest, PredictResponse
 from api.translator import translate_french_to_portuguese
 
@@ -27,14 +29,21 @@ logger = logging.getLogger(__name__)
 predict_logger = logging.getLogger("predict_audit")
 
 _loader = ModelLoader()
+_model_metrics = register_model_metrics(_loader)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Demarrage API — chargement du modele...")
     _loader.reload()
-    yield
-    logger.info("Arret API")
+    metrics_task = asyncio.create_task(_model_metrics.poll())
+    try:
+        yield
+    finally:
+        metrics_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await metrics_task
+        logger.info("Arret API")
 
 
 app = FastAPI(
@@ -191,6 +200,8 @@ def predict(request: PredictRequest) -> PredictResponse:
         satisfied,
         probability,
     )
+
+    PREDICTIONS.labels(prediction=str(int(satisfied))).inc()
 
     return PredictResponse(
         satisfied=satisfied,
