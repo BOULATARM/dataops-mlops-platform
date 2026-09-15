@@ -262,3 +262,16 @@ avec le script serveur ayant produit v19 reste à vérifier. Aucun candidat n'es
 automatiquement ni écrit par-dessus v19. L'API accepte le champ optionnel
 `review_comment_message` ; les anciens clients restent acceptés avec un texte vide,
 mais n'apportent pas le signal textuel utile au modèle v2.
+
+### Qualité des clés et stabilité des volumes
+
+Les tests SQL vérifient `(order_id, payment_sequential)` et `(order_id, order_item_id)`,
+y compris leurs composantes nulles. Silver garde la dernière ingestion de chaque paire.
+Avant chaque reconstruction, un pre-hook conserve le compte précédent dans
+`main_silver._volume_baseline_<modèle>`. Le test échoue pour une variation absolue
+supérieure à 20 % (`--vars '{volume_tolerance: 0.20}'`). Une base précédente vide
+ne peut devenir non vide sans signalement. Au premier build, la référence NULL
+indique une initialisation, pas une stabilité démontrée. `dbt test` ne modifie pas
+la référence. Conserver DuckDB entre les runs et examiner tout échec avant une relance
+(un nouveau build remplace la référence). En CI, deux builds sur les mêmes fixtures
+vérifient le chemin avec référence ; ce n'est pas un historique de production.

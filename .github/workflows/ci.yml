@@ -146,6 +146,9 @@ jobs:
         working-directory: dbt_project
         run: dbt build --profiles-dir . --target dev
 
+      - name: Verify volume stability against previous build
+        run: dbt build --project-dir dbt_project --profiles-dir dbt_project --target dev
+
       - name: Generate dbt lineage documentation
         run: dbt docs generate --project-dir dbt_project --profiles-dir dbt_project --target dev
 
