@@ -275,3 +275,14 @@ indique une initialisation, pas une stabilité démontrée. `dbt test` ne modifi
 la référence. Conserver DuckDB entre les runs et examiner tout échec avant une relance
 (un nouveau build remplace la référence). En CI, deux builds sur les mêmes fixtures
 vérifient le chemin avec référence ; ce n'est pas un historique de production.
+
+### Monitoring
+
+Chaque appel `/predict` écrit un événement JSON `predict_latency` (durée en ms,
+statut HTTP, version et run), y compris les erreurs 422/503/500. Les p50/p95 sont
+calculables sur `latency_ms` après filtrage de ces événements dans les logs Docker.
+`python -m ml.monitoring.drift reference.csv current.csv` compare les distributions
+numériques par PSI et émet un WARNING si `drift_detected` ou si la sévérité n'est
+pas `stable` (seuils 0,1/0,2). Le script local étant absent à l'audit de ce checkout,
+ce moniteur est nouvellement ajouté : son branchement au job serveur reste à vérifier.
+Ce contrôle ne mesure pas à lui seul la performance du modèle ni la dérive du texte.

@@ -4,7 +4,9 @@ FastAPI — classification satisfaction client Olist.
 /predict necessite un modele charge (sinon HTTP 503).
 """
 
+import json
 import logging
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
@@ -42,6 +44,27 @@ app = FastAPI(
     version="1.1.0",
     lifespan=lifespan,
 )
+
+
+@app.middleware("http")
+async def record_predict_latency(request, call_next):
+    if request.url.path != "/predict":
+        return await call_next(request)
+    started = time.perf_counter()
+    status = 500
+    try:
+        response = await call_next(request)
+        status = response.status_code
+        return response
+    finally:
+        predict_logger.info(json.dumps({
+            "event": "predict_latency",
+            "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+            "latency_ms": round((time.perf_counter() - started) * 1000, 3),
+            "status_code": status,
+            "model_version": _loader.model_version,
+            "run_id": _loader.run_id,
+        }))
 
 
 @app.get("/health", response_model=HealthResponse, tags=["monitoring"])
