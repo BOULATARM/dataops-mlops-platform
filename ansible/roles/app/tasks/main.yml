@@ -62,6 +62,16 @@
             MLFLOW_MODEL_STAGE: "Production"
             PYTHONIOENCODING: "utf-8"
 
+          networks:
+            mlops_net:
+              aliases:
+                - fastapi
+
+      networks:
+        mlops_net:
+          external: true
+          name: mlops_net
+
 # ---------------------------------------------------------------------------
 # Build
 #
