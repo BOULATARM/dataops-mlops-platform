@@ -57,6 +57,9 @@
     - monitoring/grafana/provisioning/datasources/prometheus.yml
     - monitoring/grafana/provisioning/dashboards/dashboards.yml
     - monitoring/grafana/dashboards/mlops-overview.json
+    - monitoring/grafana/dashboards/infrastructure-overview.json
+    - monitoring/grafana/dashboards/api-model-serving.json
+    - monitoring/grafana/dashboards/dataops-ml-quality.json
   register: monitoring_configuration
 
 # Require the Grafana production password passed by GitHub Actions.
